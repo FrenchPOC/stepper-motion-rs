@@ -1,0 +1,14 @@
+# Clippy configuration for stepper-motion
+# https://doc.rust-lang.org/clippy/
+
+# Minimum supported Rust version
+msrv = "1.70"
+
+# Cognitive complexity threshold
+cognitive-complexity-threshold = 25
+
+# Maximum number of function arguments
+too-many-arguments-threshold = 10
+
+# Maximum lines in a function
+too-many-lines-threshold = 200

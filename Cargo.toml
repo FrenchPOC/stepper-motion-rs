@@ -1,0 +1,48 @@
+[package]
+name = "stepper-motion"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+license = "MIT OR Apache-2.0"
+description = "Configuration-driven stepper motor motion control with embedded-hal 1.0 support"
+repository = "https://github.com/your-org/stepper-motion-rs"
+keywords = ["stepper", "motor", "embedded", "motion", "hal"]
+categories = ["embedded", "hardware-support", "no-std"]
+readme = "README.md"
+
+[features]
+default = ["std"]
+std = ["serde/std", "toml"]
+alloc = ["serde/alloc"]
+defmt = ["dep:defmt"]
+
+[dependencies]
+# Hardware abstraction
+embedded-hal = "1.0"
+
+# Serialization (no_std compatible)
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+
+# no_std collections with serde support
+heapless = { version = "0.8", features = ["serde"] }
+
+# Math functions for no_std
+libm = "0.2"
+
+# TOML parsing (std only)
+toml = { version = "0.8", optional = true }
+
+# Embedded logging (optional)
+defmt = { version = "0.3", optional = true }
+
+[dev-dependencies]
+# Mock implementations for testing
+embedded-hal-mock = "0.11"
+
+# Test framework enhancements
+proptest = "1.4"
+
+[profile.release]
+lto = true
+opt-level = "s"
+codegen-units = 1

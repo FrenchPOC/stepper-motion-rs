@@ -1,0 +1,103 @@
+# motion.toml - Example configuration for stepper-motion
+# 
+# This file demonstrates the full configuration schema for motor control.
+# Copy and modify this file for your specific hardware setup.
+
+#═══════════════════════════════════════════════════════════════════════════════
+# MOTORS
+# Define each motor with its mechanical properties
+#═══════════════════════════════════════════════════════════════════════════════
+
+[motors.x_axis]
+name = "X-Axis Stepper"           # Human-readable name (max 32 chars)
+steps_per_revolution = 200        # Base steps (before microstepping)
+microsteps = 16                   # Microstep divisor: 1, 2, 4, 8, 16, 32, 64, 128, 256
+gear_ratio = 1.0                  # Output:Input ratio (e.g., 5.0 = 5:1 reduction)
+max_velocity_deg_per_sec = 360.0  # Maximum angular velocity
+max_acceleration_deg_per_sec2 = 720.0  # Maximum angular acceleration
+invert_direction = false          # Swap CW/CCW if motor wired backwards
+
+[motors.x_axis.limits]
+min_degrees = -180.0              # Minimum allowed position
+max_degrees = 180.0               # Maximum allowed position
+policy = "reject"                 # "reject" or "clamp"
+
+[motors.y_axis]
+name = "Y-Axis Stepper"
+steps_per_revolution = 400        # 0.9° motor
+microsteps = 8
+gear_ratio = 2.5                  # 2.5:1 gearbox
+max_velocity_deg_per_sec = 180.0
+max_acceleration_deg_per_sec2 = 360.0
+invert_direction = true
+backlash_compensation_deg = 0.5   # Compensate 0.5° backlash on reversal
+
+[motors.z_axis]
+name = "Z-Axis (Lead Screw)"
+steps_per_revolution = 200
+microsteps = 32
+gear_ratio = 1.0
+max_velocity_deg_per_sec = 720.0
+max_acceleration_deg_per_sec2 = 1440.0
+# No limits defined = unlimited travel
+
+#═══════════════════════════════════════════════════════════════════════════════
+# TRAJECTORIES
+# Named motion profiles that can be executed by name
+#═══════════════════════════════════════════════════════════════════════════════
+
+[trajectories.x_home]
+motor = "x_axis"                  # Must match a motor key
+target_degrees = 0.0              # Absolute target position
+velocity_percent = 50             # 50% of motor's max velocity
+acceleration_percent = 100        # 100% of motor's max acceleration
+
+[trajectories.x_work_position]
+motor = "x_axis"
+target_degrees = 90.0
+velocity_percent = 100
+acceleration_percent = 80
+dwell_ms = 500                    # Wait 500ms after reaching target
+
+# Asymmetric acceleration example: fast start, gentle stop
+[trajectories.x_gentle_stop]
+motor = "x_axis"
+target_degrees = 180.0
+velocity_percent = 100
+acceleration_deg_per_sec2 = 1000.0   # Fast acceleration (absolute value)
+deceleration_deg_per_sec2 = 300.0    # Gentle deceleration (asymmetric)
+
+# Quick stop example: slow start, emergency stop capable
+[trajectories.x_emergency_ready]
+motor = "x_axis"
+target_degrees = 45.0
+velocity_percent = 80
+acceleration_deg_per_sec2 = 200.0    # Gradual acceleration
+deceleration_deg_per_sec2 = 2000.0   # Aggressive deceleration
+
+[trajectories.y_home]
+motor = "y_axis"
+target_degrees = 0.0
+velocity_percent = 30             # Slow homing
+
+[trajectories.z_up]
+motor = "z_axis"
+target_degrees = 3600.0           # 10 full rotations up
+velocity_percent = 100
+
+#═══════════════════════════════════════════════════════════════════════════════
+# SEQUENCES (Optional)
+# Multi-waypoint trajectories for scanning/inspection patterns
+#═══════════════════════════════════════════════════════════════════════════════
+
+[sequences.x_scan]
+motor = "x_axis"
+waypoints = [0.0, 45.0, 90.0, 135.0, 180.0]  # Visit each position in order
+dwell_ms = 1000                   # Wait 1 second at each waypoint
+velocity_percent = 50
+
+[sequences.y_calibration]
+motor = "y_axis"
+waypoints = [-90.0, 0.0, 90.0, 0.0]
+dwell_ms = 500
+velocity_percent = 25
