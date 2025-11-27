@@ -127,10 +127,7 @@ impl TrajectoryRegistry {
     pub fn clear(&mut self) {
         self.trajectories.clear();
     }
-}
 
-#[cfg(feature = "std")]
-impl TrajectoryRegistry {
     /// Load trajectories from a SystemConfig.
     pub fn from_config(config: &crate::config::SystemConfig) -> Self {
         let mut registry = Self::new();

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2025-11-27
+
+### Fixed
+
+- `TrajectoryRegistry::from_config()` is now available without the `std` feature, fixing compilation errors in `no_std` embedded projects
+
+## [0.1.0] - 2025-01-13
+
 ### Added
 
 #### Motor System Facade
@@ -96,5 +104,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `toml` 0.8 - TOML parsing (std feature only)
 - `libm` 0.2 - Math functions for `no_std` environments
 
-[Unreleased]: https://github.com/FrenchPOC/stepper-motion-rs/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/FrenchPOC/stepper-motion-rs/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/FrenchPOC/stepper-motion-rs/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/FrenchPOC/stepper-motion-rs/releases/tag/v0.1.0
