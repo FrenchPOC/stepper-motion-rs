@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### Motor System Facade
+- `MotorSystem` facade for multi-motor management
+- `system.motor("name")` accessor for named motor lookup
+- `system.motor_mut("name")` for mutable access
+- `motor_names()` iterator for listing all motors
+- `trajectories_for_motor()` to filter trajectories by motor
+- Constraint and trajectory lookup methods
+
+#### Trajectory Registry Enhancements
+- `get_or_error()` method with helpful error messages listing available trajectories
+- `check_feasibility()` method on `TrajectoryConfig` for constraint validation
+
+#### Motor Driver Enhancements
+- `execute()` method for trajectory execution
+- `move_to_blocking()` for synchronous position moves
+- `backlash_steps` field with automatic conversion from config degrees
+
+#### Integration Tests
+- 21 integration tests covering US1, US2, US3 scenarios
+- TOML parsing validation tests (T018-T021)
+- Mechanical constraints tests (T036-T038)
+- Trajectory registry tests (T049-T051)
+
 ## [0.1.0] - 2025-01-13
 
 ### Added

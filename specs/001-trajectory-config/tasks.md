@@ -60,10 +60,10 @@
 
 > **TDD: Write tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T018 [P] [US1] Unit test for TOML parsing in tests/unit/config_parsing.rs
-- [ ] T019 [P] [US1] Unit test for configuration validation in tests/unit/config_validation.rs
-- [ ] T020 [P] [US1] Integration test for config loading workflow in tests/integration/config_loading.rs
-- [ ] T021 [P] [US1] Contract test: valid config → parsed struct in tests/contract/config_contract.rs
+- [X] T018 [P] [US1] Unit test for TOML parsing in tests/unit/config_parsing.rs
+- [X] T019 [P] [US1] Unit test for configuration validation in tests/unit/config_validation.rs
+- [X] T020 [P] [US1] Integration test for config loading workflow in tests/integration/config_loading.rs
+- [X] T021 [P] [US1] Contract test: valid config → parsed struct in tests/contract/config_contract.rs
 
 ### Implementation for User Story 1
 
@@ -94,9 +94,9 @@
 
 ### Tests for User Story 2
 
-- [ ] T036 [P] [US2] Unit test for MechanicalConstraints derivation in tests/unit/mechanical_constraints.rs
-- [ ] T037 [P] [US2] Unit test for soft limit enforcement in tests/unit/limits.rs
-- [ ] T038 [P] [US2] Integration test for constraint validation in tests/integration/constraint_validation.rs
+- [X] T036 [P] [US2] Unit test for MechanicalConstraints derivation in tests/unit/mechanical_constraints.rs
+- [X] T037 [P] [US2] Unit test for soft limit enforcement in tests/unit/limits.rs
+- [X] T038 [P] [US2] Integration test for constraint validation in tests/integration/constraint_validation.rs
 
 ### Implementation for User Story 2
 
@@ -107,9 +107,9 @@
 - [X] T043 [US2] Implement velocity conversion (deg/sec → steps/sec) in src/config/mechanical.rs
 - [X] T044 [US2] Add limit validation in trajectory planning (reject vs clamp policy)
 - [X] T045 [US2] Implement unit conversions: degrees ↔ steps, deg/sec ↔ steps/sec
-- [ ] T046 [US2] Add trajectory feasibility check before execution
+- [X] T046 [US2] Add trajectory feasibility check before execution
 - [X] T047 [US2] Implement effective_acceleration() and effective_deceleration() for asymmetric profiles
-- [ ] T048 [US2] Update examples/basic_motor.rs with mechanical constraint demonstration
+- [X] T048 [US2] Update examples/basic_motor.rs with mechanical constraint demonstration
 
 **Checkpoint**: User Story 2 complete — trajectories validated against mechanical limits
 
@@ -123,17 +123,17 @@
 
 ### Tests for User Story 3
 
-- [ ] T049 [P] [US3] Unit test for TrajectoryRegistry in tests/unit/trajectory_registry.rs
-- [ ] T050 [P] [US3] Unit test for trajectory lookup by name in tests/unit/trajectory_lookup.rs
-- [ ] T051 [P] [US3] Integration test for named trajectory execution in tests/integration/named_trajectories.rs
+- [X] T049 [P] [US3] Unit test for TrajectoryRegistry in tests/unit/trajectory_registry.rs
+- [X] T050 [P] [US3] Unit test for trajectory lookup by name in tests/unit/trajectory_lookup.rs
+- [X] T051 [P] [US3] Integration test for named trajectory execution in tests/integration/named_trajectories.rs
 
 ### Implementation for User Story 3
 
 - [X] T052 [P] [US3] Create src/trajectory/registry.rs with TrajectoryRegistry struct
 - [X] T053 [US3] Implement registry.get("name") → Option<&TrajectoryConfig>
-- [ ] T054 [US3] Implement trajectory not found error with available names list
+- [X] T054 [US3] Implement trajectory not found error with available names list
 - [X] T055 [US3] Create src/trajectory/builder.rs with Trajectory builder API
-- [ ] T056 [US3] Implement motor.execute("trajectory_name") method
+- [X] T056 [US3] Implement motor.execute("trajectory_name") method
 - [ ] T057 [US3] Create MotorSystem facade for multi-motor configuration
 - [ ] T058 [US3] Implement system.motor("name") accessor
 - [X] T059 [US3] Add WaypointTrajectory (sequences) support in src/config/trajectory.rs
@@ -151,8 +151,8 @@
 - [X] T062 [P] Create README.md with installation, usage, and feature overview
 - [X] T063 [P] Add rustdoc documentation to all public types and methods
 - [X] T064 [P] Create motion.toml example configuration file at repository root
-- [ ] T065 Run examples from quickstart.md and verify they compile and execute
-- [ ] T066 [P] Add backlash_compensation field support in motor driver
+- [X] T065 Run examples from quickstart.md and verify they compile and execute
+- [X] T066 [P] Add backlash_compensation field support in motor driver
 - [X] T067 [P] Add invert_direction field support in motor driver
 - [X] T068 Verify no_std compilation: `cargo build --no-default-features --features alloc`
 - [X] T069 Run `cargo clippy --all-features` and fix all warnings

@@ -77,6 +77,78 @@ impl TrajectoryConfig {
             && self.acceleration.is_some()
             && self.acceleration != self.deceleration
     }
+
+    /// Check if this trajectory is feasible given the motor constraints.
+    ///
+    /// Returns `Ok(())` if the trajectory can be executed, or an error describing
+    /// why it cannot.
+    ///
+    /// # Checks performed:
+    /// - Velocity percent is valid (1-200)
+    /// - Acceleration percent is valid (1-200)
+    /// - Target position is within soft limits (if configured)
+    /// - Effective velocity doesn't exceed motor max
+    /// - Effective acceleration doesn't exceed motor max
+    pub fn check_feasibility(
+        &self,
+        constraints: &MechanicalConstraints,
+    ) -> crate::error::Result<()> {
+        use crate::error::{Error, MotionError};
+
+        // Check velocity percent
+        if self.velocity_percent == 0 || self.velocity_percent > 200 {
+            return Err(Error::Config(crate::error::ConfigError::InvalidVelocityPercent(
+                self.velocity_percent,
+            )));
+        }
+
+        // Check acceleration percent
+        if self.acceleration_percent == 0 || self.acceleration_percent > 200 {
+            return Err(Error::Config(crate::error::ConfigError::InvalidAccelerationPercent(
+                self.acceleration_percent,
+            )));
+        }
+
+        // Check if target is within limits
+        if let Some(ref limits) = constraints.limits {
+            let target_steps = constraints.degrees_to_steps(self.target_degrees.0);
+            if limits.apply(target_steps).is_none() {
+                return Err(Error::Trajectory(crate::error::TrajectoryError::TargetExceedsLimits {
+                    target: self.target_degrees.0,
+                    min: constraints.limits.as_ref().map(|l| l.min_steps as f32 / constraints.steps_per_degree).unwrap_or(f32::MIN),
+                    max: constraints.limits.as_ref().map(|l| l.max_steps as f32 / constraints.steps_per_degree).unwrap_or(f32::MAX),
+                }));
+            }
+        }
+
+        // Check effective velocity against max
+        let effective_velocity = self.effective_velocity(constraints);
+        if effective_velocity > constraints.max_velocity.0 * 2.0 {
+            return Err(Error::Motion(MotionError::VelocityExceedsLimit {
+                requested: effective_velocity,
+                max: constraints.max_velocity.0,
+            }));
+        }
+
+        // Check effective acceleration against max
+        let effective_accel = self.effective_acceleration(constraints);
+        if effective_accel > constraints.max_acceleration.0 * 2.0 {
+            return Err(Error::Motion(MotionError::AccelerationExceedsLimit {
+                requested: effective_accel,
+                max: constraints.max_acceleration.0,
+            }));
+        }
+
+        let effective_decel = self.effective_deceleration(constraints);
+        if effective_decel > constraints.max_acceleration.0 * 2.0 {
+            return Err(Error::Motion(MotionError::AccelerationExceedsLimit {
+                requested: effective_decel,
+                max: constraints.max_acceleration.0,
+            }));
+        }
+
+        Ok(())
+    }
 }
 
 /// Trajectory with multiple waypoints.

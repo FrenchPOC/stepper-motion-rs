@@ -15,6 +15,8 @@ use stepper_motion::{
 };
 
 /// Mock STEP pin for demonstration.
+/// (Kept for future example expansion showing actual motor control.)
+#[allow(dead_code)]
 struct MockStepPin;
 
 impl embedded_hal::digital::ErrorType for MockStepPin {
@@ -32,6 +34,8 @@ impl embedded_hal::digital::OutputPin for MockStepPin {
 }
 
 /// Mock DIR pin for demonstration.
+/// (Kept for future example expansion showing actual motor control.)
+#[allow(dead_code)]
 struct MockDirPin;
 
 impl embedded_hal::digital::ErrorType for MockDirPin {
@@ -49,6 +53,8 @@ impl embedded_hal::digital::OutputPin for MockDirPin {
 }
 
 /// Mock delay for demonstration.
+/// (Kept for future example expansion showing actual motor control.)
+#[allow(dead_code)]
 struct MockDelay;
 
 impl embedded_hal::delay::DelayNs for MockDelay {

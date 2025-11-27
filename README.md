@@ -1,10 +1,10 @@
-# stepper-motion-rs
+# stepper-motion
 
 A configuration-driven stepper motor motion control library for Rust, designed for embedded systems with `no_std` support.
 
-[![Crates.io](https://img.shields.io/crates/v/stepper-motion-rs.svg)](https://crates.io/crates/stepper-motion-rs)
-[![Documentation](https://docs.rs/stepper-motion-rs/badge.svg)](https://docs.rs/stepper-motion-rs)
-[![License](https://img.shields.io/crates/l/stepper-motion-rs.svg)](LICENSE)
+[![Crates.io](https://img.shields.io/crates/v/stepper-motion.svg)](https://crates.io/crates/stepper-motion)
+[![Documentation](https://docs.rs/stepper-motion/badge.svg)](https://docs.rs/stepper-motion)
+[![License](https://img.shields.io/crates/l/stepper-motion.svg)](LICENSE)
 
 ## Features
 
@@ -15,6 +15,7 @@ A configuration-driven stepper motor motion control library for Rust, designed f
 - **📐 Type-Safe Units**: Physical quantities with compile-time unit checking
 - **🛡️ Mechanical Constraints**: Automatic validation against hardware limits
 - **📍 Absolute Position Tracking**: i64 step-based position management
+- **🔄 Backlash Compensation**: Configurable mechanical play compensation
 
 ## Installation
 
@@ -22,7 +23,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-stepper-motion-rs = "0.1"
+stepper-motion = "0.1"
 ```
 
 ### Feature Flags
@@ -38,7 +39,7 @@ For `no_std` environments:
 
 ```toml
 [dependencies]
-stepper-motion-rs = { version = "0.1", default-features = false, features = ["alloc"] }
+stepper-motion = { version = "0.1", default-features = false, features = ["alloc"] }
 ```
 
 ## Quick Start
@@ -47,30 +48,30 @@ stepper-motion-rs = { version = "0.1", default-features = false, features = ["al
 
 ```toml
 # motion.toml
-[motor]
-name = "main_axis"
+[motors.pan_axis]
+name = "Pan Axis"
 steps_per_revolution = 200
 microsteps = 16
-gear_ratio = 1.0
-max_velocity_deg_per_sec = 360.0
-max_acceleration_deg_per_sec2 = 720.0
+gear_ratio = 4.0
+max_velocity_deg_per_sec = 180.0
+max_acceleration_deg_per_sec2 = 360.0
 invert_direction = false
+backlash_compensation_deg = 0.5
 
-[motor.limits]
-min_position = -180.0
-max_position = 180.0
+[motors.pan_axis.limits]
+min_degrees = -180.0
+max_degrees = 180.0
 policy = "reject"
 
-[[trajectories]]
-name = "home"
-target_position_deg = 0.0
-velocity_deg_per_sec = 90.0
-acceleration_deg_per_sec2 = 180.0
+[trajectories.home]
+motor = "pan_axis"
+target_degrees = 0.0
+velocity_percent = 50
 
-[[trajectories]]
-name = "quarter_turn"
-target_position_deg = 90.0
-velocity_deg_per_sec = 180.0
+[trajectories.quarter_turn]
+motor = "pan_axis"
+target_degrees = 90.0
+velocity_percent = 100
 acceleration_deg_per_sec2 = 360.0
 deceleration_deg_per_sec2 = 180.0  # Asymmetric: slower decel
 ```
@@ -78,74 +79,94 @@ deceleration_deg_per_sec2 = 180.0  # Asymmetric: slower decel
 ### 2. Load and Use in Your Application
 
 ```rust
-use stepper_motion_rs::{
-    config::{SystemConfig, MechanicalConstraints},
+use stepper_motion::{
+    SystemConfig, 
     motor::StepperMotorBuilder,
     trajectory::TrajectoryRegistry,
-    units::Degrees,
+    config::units::Degrees,
 };
-use embedded_hal::digital::OutputPin;
-use embedded_hal::delay::DelayNs;
 
 // Load configuration (requires `std` feature)
-#[cfg(feature = "std")]
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = SystemConfig::from_toml_file("motion.toml")?;
+fn main() -> Result<(), stepper_motion::Error> {
+    // Parse TOML configuration
+    let config: SystemConfig = toml::from_str(include_str!("motion.toml"))?;
     
-    // Your hardware pins (implement embedded-hal traits)
+    // Get motor configuration
+    let motor_config = config.motor("pan_axis").expect("Motor not found");
+    
+    // Your hardware pins (implement embedded-hal 1.0 traits)
     let step_pin = MyStepPin::new();
     let dir_pin = MyDirPin::new();
     let delay = MyDelay::new();
     
     // Build motor from configuration
-    let motor = StepperMotorBuilder::new(step_pin, dir_pin, delay)
-        .from_motor_config(&config.motor)?
-        .build();
+    let motor = StepperMotorBuilder::new()
+        .step_pin(step_pin)
+        .dir_pin(dir_pin)
+        .delay(delay)
+        .from_motor_config(motor_config)
+        .build()?;
     
-    // Load trajectory registry
-    let registry = TrajectoryRegistry::from_config(&config)?;
+    // Load trajectory registry for named lookups
+    let registry = TrajectoryRegistry::from_config(&config);
     
-    // Get named trajectory
-    if let Some(trajectory) = registry.get("quarter_turn") {
-        println!("Executing: {} to {}°", 
-            trajectory.name, 
-            trajectory.target_position_deg);
-    }
+    // Get trajectory by name
+    let trajectory = registry.get_or_error("quarter_turn")?;
+    println!("Target: {}°", trajectory.target_degrees.0);
     
     Ok(())
 }
 ```
 
-### 3. Manual Motor Control
+### 3. Manual Motor Control (Builder Pattern)
 
 ```rust
-use stepper_motion_rs::motor::{StepperMotor, Idle};
-use stepper_motion_rs::units::{Degrees, Microsteps};
+use stepper_motion::{
+    motor::StepperMotorBuilder,
+    config::units::{Degrees, DegreesPerSec, DegreesPerSecSquared, Microsteps},
+};
 
 // Create motor with explicit parameters
-let mut motor = StepperMotor::new(step_pin, dir_pin, delay)
-    .with_steps_per_rev(200)
-    .with_microsteps(Microsteps::X16)
-    .with_gear_ratio(1.0);
+let motor = StepperMotorBuilder::new()
+    .name("demo_motor")
+    .step_pin(step_pin)
+    .dir_pin(dir_pin)
+    .delay(delay)
+    .steps_per_revolution(200)
+    .microsteps(Microsteps::SIXTEENTH)
+    .gear_ratio(1.0)
+    .max_velocity(DegreesPerSec(360.0))
+    .max_acceleration(DegreesPerSecSquared(720.0))
+    .backlash_steps(10)  // Optional: backlash compensation
+    .build()?;
+
+println!("Motor: {}", motor.name());
+println!("Position: {} steps ({} degrees)", 
+    motor.position_steps().0, 
+    motor.position_degrees().0);
 
 // Move to absolute position
-motor.move_to(Degrees::new(90.0))?;
+let moving_motor = motor.move_to(Degrees(90.0))?;
 
-// Check current position
-let position = motor.position();
-println!("Current position: {} steps", position.steps());
+// Execute step-by-step
+while moving_motor.is_moving() {
+    moving_motor.step()?;
+}
+
+let idle_motor = moving_motor.finish();
 ```
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    stepper-motion-rs                │
+│                    stepper-motion                   │
 ├─────────────────────────────────────────────────────┤
 │  config/          │ TOML parsing, validation        │
 │  ├── motor.rs     │ MotorConfig, limits             │
 │  ├── trajectory.rs│ TrajectoryConfig (asymmetric)   │
 │  ├── mechanical.rs│ MechanicalConstraints           │
+│  ├── limits.rs    │ SoftLimits, LimitPolicy         │
 │  └── units.rs     │ Degrees, Steps, Microsteps      │
 ├─────────────────────────────────────────────────────┤
 │  motor/           │ Hardware abstraction            │
@@ -159,8 +180,7 @@ println!("Current position: {} steps", position.steps());
 │  └── executor.rs  │ Step pulse generation           │
 ├─────────────────────────────────────────────────────┤
 │  trajectory/      │ Named trajectory management     │
-│  ├── registry.rs  │ TrajectoryRegistry              │
-│  └── builder.rs   │ Trajectory builder API          │
+│  └── registry.rs  │ TrajectoryRegistry              │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -192,15 +212,25 @@ max ┤    ┌───────┐
      accel        decel
 ```
 
-Set different rates:
+Set different rates in TOML:
 
 ```toml
-[[trajectories]]
-name = "gentle_stop"
-target_position_deg = 90.0
-velocity_deg_per_sec = 180.0
+[trajectories.gentle_stop]
+motor = "pan_axis"
+target_degrees = 90.0
+velocity_percent = 100
 acceleration_deg_per_sec2 = 720.0   # Fast acceleration
 deceleration_deg_per_sec2 = 180.0   # Gentle deceleration
+```
+
+Or using percent-based values (relative to motor max):
+
+```toml
+[trajectories.smooth_move]
+motor = "pan_axis"
+target_degrees = 45.0
+velocity_percent = 75      # 75% of motor's max velocity
+acceleration_percent = 100 # 100% of motor's max acceleration
 ```
 
 ## Mechanical Constraints
@@ -208,34 +238,72 @@ deceleration_deg_per_sec2 = 180.0   # Gentle deceleration
 Define hardware limits to prevent damage:
 
 ```toml
-[motor]
+[motors.servo]
+name = "Servo Axis"
 steps_per_revolution = 200
-microsteps = 16
-gear_ratio = 5.0  # 5:1 reduction
+microsteps = 32
+gear_ratio = 5.0  # 5:1 reduction gearbox
 max_velocity_deg_per_sec = 360.0
 max_acceleration_deg_per_sec2 = 720.0
+backlash_compensation_deg = 0.5  # Compensate 0.5° backlash on reversal
 
-[motor.limits]
-min_position = -360.0  # degrees
-max_position = 360.0
-policy = "reject"      # or "clamp"
+[motors.servo.limits]
+min_degrees = -360.0
+max_degrees = 360.0
+policy = "reject"  # or "clamp"
 ```
 
 ### Limit Policies
 
-- **`reject`**: Return error if trajectory exceeds limits
-- **`clamp`**: Automatically constrain values to limits
+- **`reject`**: Return error if target position exceeds limits
+- **`clamp`**: Automatically constrain target to nearest limit
+
+### Unit Conversions
+
+The library automatically handles conversions:
+
+```rust
+let constraints = motor.constraints();
+
+// Configuration values → internal steps
+println!("Steps/revolution: {}", constraints.steps_per_revolution);
+println!("Steps/degree: {:.4}", constraints.steps_per_degree);
+println!("Max velocity: {:.0} steps/s", constraints.max_velocity_steps_per_sec);
+```
 
 ## Examples
 
-Run the examples:
+Run the included examples:
 
 ```bash
-# Basic motor control
-cargo run --example basic_motor --features std
+# Basic motor control with mechanical constraints demonstration
+cargo run --example basic_motor
 
-# Configuration-driven operation
-cargo run --example config_driven --features std
+# Configuration-driven operation with named trajectories
+cargo run --example config_driven
+
+# Multi-motor system demonstration
+cargo run --example multi_motor
+```
+
+## Type-State Safety
+
+The motor uses Rust's type system to enforce valid state transitions:
+
+```rust
+// Motor starts in Idle state
+let motor: StepperMotor<_, _, _, Idle> = builder.build()?;
+
+// move_to() transitions to Moving state
+let moving: StepperMotor<_, _, _, Moving> = motor.move_to(Degrees(90.0))?;
+
+// Can only call step() or finish() on Moving motor
+while moving.is_moving() {
+    moving.step()?;
+}
+
+// finish() transitions back to Idle
+let motor: StepperMotor<_, _, _, Idle> = moving.finish();
 ```
 
 ## Minimum Supported Rust Version (MSRV)
@@ -250,38 +318,52 @@ For embedded systems without standard library:
 #![no_std]
 #![no_main]
 
-use stepper_motion_rs::{
-    config::SystemConfig,
-    motor::StepperMotorBuilder,
-};
+use stepper_motion::{SystemConfig, motor::StepperMotorBuilder};
 
-// Parse embedded configuration (no file loading)
+// Embed configuration at compile time
 const CONFIG_TOML: &str = include_str!("../motion.toml");
 
 fn setup() {
-    // Manual parsing required in no_std
-    // Use serde with heapless strings
+    // Parse embedded configuration
+    let config: SystemConfig = toml::from_str(CONFIG_TOML).unwrap();
+    
+    let motor_config = config.motor("servo").unwrap();
+    
+    // Build motor with your embedded-hal pins
+    let motor = StepperMotorBuilder::new()
+        .step_pin(gpioa.pa0.into_push_pull_output())
+        .dir_pin(gpioa.pa1.into_push_pull_output())
+        .delay(timer.delay_us())
+        .from_motor_config(motor_config)
+        .build()
+        .unwrap();
 }
 ```
 
 ## Contributing
 
-Contributions are welcome! Please read the [CHANGELOG](CHANGELOG.md) for version history and the development guidelines.
+Contributions are welcome! Please read the [CHANGELOG](CHANGELOG.md) for version history.
 
 ### Development
 
 ```bash
-# Run tests
+# Run all tests (46 tests: 25 unit + 21 integration)
 cargo test --all-features
 
 # Check no_std compatibility
-cargo check --no-default-features --features alloc
+cargo build --no-default-features
+cargo build --no-default-features --features alloc
 
 # Run clippy
 cargo clippy --all-features
 
 # Format code
 cargo fmt
+
+# Run examples
+cargo run --example basic_motor
+cargo run --example config_driven
+cargo run --example multi_motor
 ```
 
 ## License

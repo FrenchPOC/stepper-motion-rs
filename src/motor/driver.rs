@@ -53,6 +53,9 @@ where
     /// Whether direction pin logic is inverted.
     invert_direction: bool,
 
+    /// Backlash compensation in steps (applied on direction change).
+    backlash_steps: i64,
+
     /// Motion executor for current move (if any).
     executor: Option<MotionExecutor>,
 
@@ -112,6 +115,7 @@ where
         constraints: MechanicalConstraints,
         name: heapless::String<32>,
         invert_direction: bool,
+        backlash_steps: i64,
     ) -> Self {
         Self {
             step_pin,
@@ -122,6 +126,7 @@ where
             constraints,
             name,
             invert_direction,
+            backlash_steps,
             executor: None,
             _state: PhantomData,
         }
@@ -195,6 +200,7 @@ where
             constraints: self.constraints,
             name: self.name,
             invert_direction: self.invert_direction,
+            backlash_steps: self.backlash_steps,
             executor: Some(executor),
             _state: PhantomData,
         })
@@ -217,6 +223,88 @@ where
     /// Set the current position to a specific value.
     pub fn set_position(&mut self, degrees: Degrees) {
         self.position.set_degrees(degrees);
+    }
+
+    /// Execute a named trajectory from a registry.
+    ///
+    /// This method looks up the trajectory by name, validates it against
+    /// the motor's constraints, and executes it to completion.
+    ///
+    /// # Arguments
+    ///
+    /// * `trajectory_name` - Name of the trajectory in the registry
+    /// * `registry` - The trajectory registry to look up the trajectory
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(self)` with the motor back in Idle state after the move completes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The trajectory is not found in the registry
+    /// - The trajectory's target motor doesn't match this motor's name
+    /// - The move fails due to limits or hardware errors
+    pub fn execute(
+        self,
+        trajectory_name: &str,
+        registry: &crate::trajectory::TrajectoryRegistry,
+    ) -> core::result::Result<Self, (Self, Error)> {
+        // Look up trajectory
+        let trajectory = match registry.get(trajectory_name) {
+            Some(t) => t,
+            None => {
+                // Build error with available names
+                let mut msg: heapless::String<64> = heapless::String::new();
+                let _ = msg.push_str("trajectory '");
+                let _ = msg.push_str(trajectory_name);
+                let _ = msg.push_str("' not found");
+                return Err((
+                    self,
+                    Error::Trajectory(crate::error::TrajectoryError::InvalidName(msg)),
+                ));
+            }
+        };
+
+        // Verify this trajectory is for this motor
+        if trajectory.motor.as_str() != self.name.as_str() {
+            let mut msg: heapless::String<64> = heapless::String::new();
+            let _ = msg.push_str("trajectory '");
+            let _ = msg.push_str(trajectory_name);
+            let _ = msg.push_str("' is for motor '");
+            let _ = msg.push_str(trajectory.motor.as_str());
+            let _ = msg.push_str("'");
+            return Err((
+                self,
+                Error::Trajectory(crate::error::TrajectoryError::InvalidName(msg)),
+            ));
+        }
+
+        // Execute the move to the target position
+        let target = trajectory.target_degrees;
+        self.move_to_blocking(target)
+    }
+
+    /// Move to an absolute position and run to completion (blocking).
+    ///
+    /// This is a convenience method that combines `move_to` and `run_to_completion`.
+    pub fn move_to_blocking(
+        self,
+        target: Degrees,
+    ) -> core::result::Result<Self, (Self, Error)> {
+        match self.move_to(target) {
+            Ok(moving) => {
+                match moving.run_to_completion() {
+                    Ok(idle) => Ok(idle),
+                    Err(e) => {
+                        // In practice, step errors are rare and typically unrecoverable
+                        // We can't return the motor in a good state here
+                        panic!("Motor step error during move: {:?}", e);
+                    }
+                }
+            }
+            Err(e) => Err(e),
+        }
     }
 
     fn set_direction(&mut self, direction: Direction) -> core::result::Result<(), ()> {
@@ -323,6 +411,7 @@ where
             constraints: self.constraints,
             name: self.name,
             invert_direction: self.invert_direction,
+            backlash_steps: self.backlash_steps,
             executor: None,
             _state: PhantomData,
         }

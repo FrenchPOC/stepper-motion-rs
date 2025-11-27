@@ -57,6 +57,35 @@ impl TrajectoryRegistry {
         self.trajectories.get(&name_str)
     }
 
+    /// Get a trajectory by name, returning an error with available names if not found.
+    ///
+    /// # Errors
+    ///
+    /// Returns `TrajectoryError::NotFoundWithNames` if the trajectory doesn't exist,
+    /// including a list of available trajectory names for debugging.
+    pub fn get_or_error(&self, name: &str) -> Result<&TrajectoryConfig> {
+        self.get(name).ok_or_else(|| {
+            // Build list of available names for the error message
+            let mut available: heapless::String<256> = heapless::String::new();
+            let mut first = true;
+            for traj_name in self.names() {
+                if !first {
+                    let _ = available.push_str(", ");
+                }
+                let _ = available.push_str(traj_name);
+                first = false;
+            }
+            
+            let mut msg: heapless::String<64> = heapless::String::new();
+            let _ = msg.push_str("'");
+            let _ = msg.push_str(name);
+            let _ = msg.push_str("' not found. Available: ");
+            let _ = msg.push_str(&available);
+            
+            Error::Trajectory(TrajectoryError::InvalidName(msg))
+        })
+    }
+
     /// Check if a trajectory exists.
     pub fn contains(&self, name: &str) -> bool {
         if let Ok(name_str) = String::try_from(name) {

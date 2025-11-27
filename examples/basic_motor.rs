@@ -4,9 +4,15 @@
 //! a simple trajectory with asymmetric acceleration/deceleration.
 //!
 //! This example uses embedded-hal-mock for testing without real hardware.
+//!
+//! ## Key Concepts Demonstrated:
+//! - Manual motor configuration via builder
+//! - MechanicalConstraints for unit conversion (degrees → steps)
+//! - Asymmetric motion profiles
+//! - Configuration validation
 
 use stepper_motion::{
-    config::units::{DegreesPerSec, DegreesPerSecSquared, Microsteps},
+    config::units::{Degrees, DegreesPerSec, DegreesPerSecSquared, Microsteps},
     motor::StepperMotorBuilder,
     motion::MotionProfile,
 };
@@ -77,6 +83,41 @@ fn main() {
     );
     println!("State: {}", motor.state_name());
 
+    // ========================================================================
+    // Mechanical Constraints Demonstration
+    // ========================================================================
+    println!("\n=== Mechanical Constraints (Unit Conversion) ===");
+    
+    // Access the motor's constraints for unit conversion
+    let constraints = motor.constraints();
+    
+    println!("Motor configuration:");
+    println!("  Steps/revolution: {} (base 200 × 16 microsteps)", constraints.steps_per_revolution);
+    println!("  Steps/degree: {:.4}", constraints.steps_per_degree);
+    println!("  Max velocity: {:.2}°/s = {:.0} steps/s", 
+        constraints.max_velocity.0, 
+        constraints.max_velocity_steps_per_sec);
+    println!("  Max acceleration: {:.2}°/s² = {:.0} steps/s²",
+        constraints.max_acceleration.0,
+        constraints.max_acceleration_steps_per_sec2);
+    println!("  Min step interval: {} ns ({:.0} kHz max)", 
+        constraints.min_step_interval_ns,
+        1_000_000_000.0 / constraints.min_step_interval_ns as f64 / 1000.0);
+    
+    // Demonstrate unit conversions
+    println!("\nUnit conversions:");
+    let target_degrees = Degrees(90.0);
+    let target_steps = (target_degrees.0 * constraints.steps_per_degree) as i64;
+    println!("  90° = {} steps", target_steps);
+    
+    let target_degrees = Degrees(360.0);
+    let target_steps = (target_degrees.0 * constraints.steps_per_degree) as i64;
+    println!("  360° (1 rev) = {} steps", target_steps);
+
+    // ========================================================================
+    // Motion Profile Demonstration
+    // ========================================================================
+    
     // Demonstrate motion profile calculation
     let profile = MotionProfile::asymmetric_trapezoidal(
         3200,  // steps (1 full revolution at 16x microstepping)

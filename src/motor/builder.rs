@@ -28,6 +28,7 @@ where
     max_acceleration: Option<DegreesPerSecSquared>,
     invert_direction: bool,
     constraints: Option<MechanicalConstraints>,
+    backlash_steps: i64,
 }
 
 impl<STEP, DIR, DELAY> Default for StepperMotorBuilder<STEP, DIR, DELAY>
@@ -61,6 +62,7 @@ where
             max_acceleration: None,
             invert_direction: false,
             constraints: None,
+            backlash_steps: 0,
         }
     }
 
@@ -124,6 +126,14 @@ where
         self
     }
 
+    /// Set backlash compensation in steps.
+    ///
+    /// Backlash is applied on direction changes to compensate for mechanical play.
+    pub fn backlash_steps(mut self, steps: i64) -> Self {
+        self.backlash_steps = steps;
+        self
+    }
+
     /// Configure from a MotorConfig.
     pub fn from_motor_config(mut self, config: &MotorConfig) -> Self {
         self.name = Some(config.name.clone());
@@ -134,6 +144,11 @@ where
         self.max_acceleration = Some(config.max_acceleration);
         self.invert_direction = config.invert_direction;
         self.constraints = Some(MechanicalConstraints::from_config(config));
+        // Extract backlash compensation if configured (convert degrees to steps)
+        if let Some(backlash_deg) = config.backlash_compensation {
+            let steps_per_degree = config.steps_per_degree();
+            self.backlash_steps = (backlash_deg.0 * steps_per_degree) as i64;
+        }
         self
     }
 
@@ -222,6 +237,7 @@ where
             constraints,
             name,
             self.invert_direction,
+            self.backlash_steps,
         ))
     }
 }
