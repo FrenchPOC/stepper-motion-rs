@@ -96,5 +96,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `toml` 0.8 - TOML parsing (std feature only)
 - `libm` 0.2 - Math functions for `no_std` environments
 
-[Unreleased]: https://github.com/your-org/stepper-motion-rs/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/your-org/stepper-motion-rs/releases/tag/v0.1.0
+[Unreleased]: https://github.com/FrenchPOC/stepper-motion-rs/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/FrenchPOC/stepper-motion-rs/releases/tag/v0.1.0

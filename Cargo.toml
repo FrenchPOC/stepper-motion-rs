@@ -3,12 +3,13 @@ name = "stepper-motion"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.70"
-license = "MIT OR Apache-2.0"
+license = "MIT"
 description = "Configuration-driven stepper motor motion control with embedded-hal 1.0 support"
-repository = "https://github.com/your-org/stepper-motion-rs"
+repository = "https://github.com/FrenchPOC/stepper-motion-rs"
 keywords = ["stepper", "motor", "embedded", "motion", "hal"]
 categories = ["embedded", "hardware-support", "no-std"]
 readme = "README.md"
+exclude = [".github/", ".specify/", ".vscode/", "specs/", "target/"]
 
 [features]
 default = ["std"]
@@ -46,3 +47,7 @@ proptest = "1.4"
 lto = true
 opt-level = "s"
 codegen-units = 1
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
