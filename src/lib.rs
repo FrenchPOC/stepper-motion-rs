@@ -10,6 +10,7 @@
 //! - **Asymmetric profiles**: Independent acceleration and deceleration rates
 //! - **Position tracking**: Absolute position tracked at all times
 //! - **Type-state safety**: Compile-time motor state verification
+//! - **Async support**: Optional async motor control using `embassy-time` (compatible with std and no_std)
 //!
 //! ## Quick Start
 //!
@@ -31,11 +32,30 @@
 //! motor.execute("home")?;
 //! ```
 //!
+//! ## Async Usage (requires `async` feature)
+//!
+//! ```rust,ignore
+//! use stepper_motion::{AsyncStepperMotor, SystemConfig};
+//! use embassy_time::Delay;
+//!
+//! // Create async motor with embassy-time delay
+//! let mut motor = AsyncStepperMotor::builder()
+//!     .from_config(&config, "x_axis")?
+//!     .step_pin(step_pin)
+//!     .dir_pin(dir_pin)
+//!     .delay(Delay)
+//!     .build()?;
+//!
+//! // Execute trajectory asynchronously - other tasks can run during delays
+//! motor = motor.execute_async("home", &registry).await?;
+//! ```
+//!
 //! ## Feature Flags
 //!
 //! - `std` (default): Enables file I/O and TOML parsing
 //! - `alloc`: Enables heap allocation for no_std with allocator
 //! - `defmt`: Enables defmt logging for embedded targets
+//! - `async`: Enables async motor control using `embedded-hal-async` and `embassy-time`
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
@@ -67,3 +87,9 @@ pub use config::load_config;
 
 // Unit types
 pub use config::units::{Degrees, DegreesPerSec, DegreesPerSecSquared, Microsteps, Steps};
+
+// Async re-exports (async feature only)
+#[cfg(feature = "async")]
+pub use motion::{AsyncMotionExecutor, async_delay_ns, async_delay_us};
+#[cfg(feature = "async")]
+pub use motor::{AsyncMotorRunner, AsyncMotorSystem, AsyncStepperMotor, AsyncStepperMotorBuilder};

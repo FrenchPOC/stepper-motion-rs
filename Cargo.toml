@@ -16,10 +16,18 @@ default = ["std"]
 std = ["serde/std", "toml"]
 alloc = ["serde/alloc"]
 defmt = ["dep:defmt"]
+# Async support using embedded-hal-async (compatible with std and no_std)
+async = ["dep:embedded-hal-async", "dep:embassy-time"]
 
 [dependencies]
 # Hardware abstraction
 embedded-hal = "1.0"
+
+# Async hardware abstraction (optional)
+embedded-hal-async = { version = "1.0", optional = true }
+
+# Embassy time for async delays (optional, no_std compatible)
+embassy-time = { version = "0.4", optional = true }
 
 # Serialization (no_std compatible)
 serde = { version = "1.0", default-features = false, features = ["derive"] }
