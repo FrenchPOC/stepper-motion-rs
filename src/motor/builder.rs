@@ -225,6 +225,8 @@ where
                 invert_direction: self.invert_direction,
                 limits: None,
                 backlash_compensation: None,
+                switches: None,
+                homing: None,
             };
 
             MechanicalConstraints::from_config(&config)

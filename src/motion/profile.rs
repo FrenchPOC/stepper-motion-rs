@@ -33,6 +33,15 @@ impl Direction {
             Direction::CounterClockwise => -1,
         }
     }
+
+    /// Get the opposite direction.
+    #[inline]
+    pub fn opposite(self) -> Self {
+        match self {
+            Direction::Clockwise => Direction::CounterClockwise,
+            Direction::CounterClockwise => Direction::Clockwise,
+        }
+    }
 }
 
 /// Current phase of motion execution.

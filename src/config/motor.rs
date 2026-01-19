@@ -3,7 +3,9 @@
 use heapless::String;
 use serde::Deserialize;
 
+use super::homing::HomingConfig;
 use super::limits::SoftLimits;
+use super::switches::SwitchesConfig;
 use super::units::{Degrees, DegreesPerSec, DegreesPerSecSquared, Microsteps};
 
 /// Complete motor configuration from TOML.
@@ -41,6 +43,14 @@ pub struct MotorConfig {
     /// Optional backlash compensation in degrees.
     #[serde(default, rename = "backlash_compensation_deg")]
     pub backlash_compensation: Option<Degrees>,
+
+    /// Physical switch configuration (home switch, limit switches).
+    #[serde(default)]
+    pub switches: Option<SwitchesConfig>,
+
+    /// Homing configuration.
+    #[serde(default)]
+    pub homing: Option<HomingConfig>,
 }
 
 fn default_gear_ratio() -> f32 {
@@ -76,6 +86,8 @@ mod tests {
             invert_direction: false,
             limits: None,
             backlash_compensation: None,
+            switches: None,
+            homing: None,
         };
 
         // 200 * 16 * 2.0 = 6400

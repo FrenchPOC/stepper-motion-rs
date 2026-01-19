@@ -7,6 +7,7 @@
 
 mod builder;
 mod driver;
+mod homing;
 mod position;
 pub mod state;
 mod system;
@@ -16,10 +17,13 @@ mod async_builder;
 #[cfg(feature = "async")]
 mod async_driver;
 #[cfg(feature = "async")]
+mod async_homing;
+#[cfg(feature = "async")]
 mod async_system;
 
 pub use builder::StepperMotorBuilder;
 pub use driver::StepperMotor;
+pub use homing::{execute_homing_blocking, HomingExecutor, HomingSwitches};
 pub use position::Position;
 pub use state::{Fault, Homing, Idle, MotorState, Moving, StateName};
 pub use system::MotorSystem;
@@ -28,5 +32,7 @@ pub use system::MotorSystem;
 pub use async_builder::AsyncStepperMotorBuilder;
 #[cfg(feature = "async")]
 pub use async_driver::{AsyncMotorRunner, AsyncStepperMotor};
+#[cfg(feature = "async")]
+pub use async_homing::execute_homing_async;
 #[cfg(feature = "async")]
 pub use async_system::AsyncMotorSystem;

@@ -135,6 +135,8 @@ mod tests {
             invert_direction: false,
             limits: None,
             backlash_compensation: None,
+            switches: None,
+            homing: None,
         }
     }
 

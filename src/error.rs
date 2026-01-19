@@ -73,6 +73,39 @@ pub enum MotorError {
         /// Limit that was exceeded (min or max)
         limit: i64,
     },
+    /// Hardware limit switch triggered
+    HardwareLimitTriggered {
+        /// Which limit was triggered ("min" or "max")
+        limit_type: heapless::String<8>,
+    },
+    /// Homing failed
+    HomingFailed(HomingError),
+    /// No home switch configured
+    NoHomeSwitch,
+    /// Switch read error
+    SwitchReadError,
+}
+
+/// Homing-specific errors.
+#[derive(Debug, Clone, PartialEq)]
+pub enum HomingError {
+    /// Home switch not found within max travel distance
+    SwitchNotFound {
+        /// Distance traveled before giving up
+        distance_traveled: f32,
+        /// Maximum allowed travel
+        max_travel: f32,
+    },
+    /// Limit switch triggered unexpectedly during homing
+    UnexpectedLimitTriggered,
+    /// No home switch configured for this motor
+    NoHomeSwitchConfigured,
+    /// Homing was aborted
+    Aborted,
+    /// Invalid homing configuration
+    InvalidConfig(heapless::String<64>),
+    /// Timeout during homing
+    Timeout,
 }
 
 /// Motion profile and execution errors.
@@ -177,6 +210,38 @@ impl fmt::Display for MotorError {
             MotorError::LimitExceeded { position, limit } => {
                 write!(f, "Position {} exceeds limit {}", position, limit)
             }
+            MotorError::HardwareLimitTriggered { limit_type } => {
+                write!(f, "Hardware {} limit switch triggered", limit_type)
+            }
+            MotorError::HomingFailed(e) => write!(f, "Homing failed: {}", e),
+            MotorError::NoHomeSwitch => write!(f, "No home switch configured"),
+            MotorError::SwitchReadError => write!(f, "Failed to read switch state"),
+        }
+    }
+}
+
+impl fmt::Display for HomingError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HomingError::SwitchNotFound {
+                distance_traveled,
+                max_travel,
+            } => {
+                write!(
+                    f,
+                    "Home switch not found after {} degrees (max: {})",
+                    distance_traveled, max_travel
+                )
+            }
+            HomingError::UnexpectedLimitTriggered => {
+                write!(f, "Limit switch triggered unexpectedly during homing")
+            }
+            HomingError::NoHomeSwitchConfigured => {
+                write!(f, "No home switch configured for this motor")
+            }
+            HomingError::Aborted => write!(f, "Homing was aborted"),
+            HomingError::InvalidConfig(msg) => write!(f, "Invalid homing configuration: {}", msg),
+            HomingError::Timeout => write!(f, "Homing timed out"),
         }
     }
 }
@@ -244,6 +309,18 @@ impl From<TrajectoryError> for Error {
     }
 }
 
+impl From<HomingError> for Error {
+    fn from(e: HomingError) -> Self {
+        Error::Motor(MotorError::HomingFailed(e))
+    }
+}
+
+impl From<HomingError> for MotorError {
+    fn from(e: HomingError) -> Self {
+        MotorError::HomingFailed(e)
+    }
+}
+
 #[cfg(feature = "std")]
 impl std::error::Error for Error {}
 
@@ -258,3 +335,6 @@ impl std::error::Error for MotionError {}
 
 #[cfg(feature = "std")]
 impl std::error::Error for TrajectoryError {}
+
+#[cfg(feature = "std")]
+impl std::error::Error for HomingError {}

@@ -76,9 +76,12 @@ pub mod trajectory;
 
 // Re-exports for ergonomic API
 pub use config::{MotorConfig, SystemConfig, TrajectoryConfig, validate_config};
-pub use error::{Error, Result};
+pub use config::{HomingConfig, HomingDirection, HomingPhase, HomingStrategy};
+pub use config::{SwitchConfig, SwitchPolarity, SwitchesConfig};
+pub use error::{Error, HomingError, Result};
 pub use motion::{Direction, MotionPhase, MotionProfile};
 pub use motor::{state, MotorSystem, StepperMotor};
+pub use motor::{execute_homing_blocking, HomingExecutor, HomingSwitches};
 pub use trajectory::TrajectoryRegistry;
 
 // Configuration loading (std only)
@@ -93,3 +96,5 @@ pub use config::units::{Degrees, DegreesPerSec, DegreesPerSecSquared, Microsteps
 pub use motion::{AsyncMotionExecutor, async_delay_ns, async_delay_us};
 #[cfg(feature = "async")]
 pub use motor::{AsyncMotorRunner, AsyncMotorSystem, AsyncStepperMotor, AsyncStepperMotorBuilder};
+#[cfg(feature = "async")]
+pub use motor::execute_homing_async;

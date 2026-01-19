@@ -3,9 +3,11 @@
 //! Provides types for loading and validating motor and trajectory configurations
 //! from TOML files (with `std` feature) or pre-parsed data.
 
+mod homing;
 mod limits;
 mod mechanical;
 mod motor;
+mod switches;
 mod system;
 mod trajectory;
 pub mod units;
@@ -13,9 +15,11 @@ pub mod units;
 mod loader;
 mod validation;
 
+pub use homing::{HomingConfig, HomingDirection, HomingPhase, HomingStrategy};
 pub use limits::{LimitPolicy, SoftLimits, StepLimits};
 pub use mechanical::MechanicalConstraints;
 pub use motor::MotorConfig;
+pub use switches::{SwitchConfig, SwitchPolarity, SwitchesConfig};
 pub use system::SystemConfig;
 pub use trajectory::{TrajectoryConfig, WaypointTrajectory};
 pub use validation::validate_config;
