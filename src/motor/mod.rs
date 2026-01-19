@@ -8,6 +8,7 @@
 mod builder;
 mod driver;
 mod homing;
+mod limit_handler;
 mod position;
 pub mod state;
 mod system;
@@ -24,6 +25,7 @@ mod async_system;
 pub use builder::StepperMotorBuilder;
 pub use driver::StepperMotor;
 pub use homing::{execute_homing_blocking, HomingExecutor, HomingSwitches};
+pub use limit_handler::{LimitCallback, LimitEvent, LimitFlags, LimitHandler, LimitType};
 pub use position::Position;
 pub use state::{Fault, Homing, Idle, MotorState, Moving, StateName};
 pub use system::MotorSystem;

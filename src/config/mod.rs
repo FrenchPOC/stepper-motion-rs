@@ -19,7 +19,7 @@ pub use homing::{HomingConfig, HomingDirection, HomingPhase, HomingStrategy};
 pub use limits::{LimitPolicy, SoftLimits, StepLimits};
 pub use mechanical::MechanicalConstraints;
 pub use motor::MotorConfig;
-pub use switches::{SwitchConfig, SwitchPolarity, SwitchesConfig};
+pub use switches::{LimitTriggerMode, SwitchConfig, SwitchPolarity, SwitchesConfig};
 pub use system::SystemConfig;
 pub use trajectory::{TrajectoryConfig, WaypointTrajectory};
 pub use validation::validate_config;

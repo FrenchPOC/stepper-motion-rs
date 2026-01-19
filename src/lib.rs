@@ -77,11 +77,12 @@ pub mod trajectory;
 // Re-exports for ergonomic API
 pub use config::{MotorConfig, SystemConfig, TrajectoryConfig, validate_config};
 pub use config::{HomingConfig, HomingDirection, HomingPhase, HomingStrategy};
-pub use config::{SwitchConfig, SwitchPolarity, SwitchesConfig};
+pub use config::{SwitchConfig, SwitchPolarity, SwitchesConfig, LimitTriggerMode};
 pub use error::{Error, HomingError, Result};
 pub use motion::{Direction, MotionPhase, MotionProfile};
 pub use motor::{state, MotorSystem, StepperMotor};
 pub use motor::{execute_homing_blocking, HomingExecutor, HomingSwitches};
+pub use motor::{LimitCallback, LimitEvent, LimitFlags, LimitHandler, LimitType};
 pub use trajectory::TrajectoryRegistry;
 
 // Configuration loading (std only)

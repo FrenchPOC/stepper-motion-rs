@@ -33,6 +33,19 @@ impl SwitchPolarity {
     }
 }
 
+/// Trigger mode for limit switches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LimitTriggerMode {
+    /// Switches are polled during motor stepping.
+    /// Simpler but has latency equal to step interval.
+    #[default]
+    Polling,
+    /// Switches trigger hardware interrupts with callbacks.
+    /// Lower latency, immediate response.
+    Interrupt,
+}
+
 /// Configuration for a single switch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub struct SwitchConfig {
@@ -43,6 +56,10 @@ pub struct SwitchConfig {
     /// Whether this switch is enabled/connected.
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+
+    /// Trigger mode (polling or interrupt).
+    #[serde(default)]
+    pub trigger_mode: LimitTriggerMode,
 }
 
 fn default_enabled() -> bool {
@@ -54,6 +71,7 @@ impl Default for SwitchConfig {
         Self {
             polarity: SwitchPolarity::NO,
             enabled: true,
+            trigger_mode: LimitTriggerMode::Polling,
         }
     }
 }
@@ -64,6 +82,16 @@ impl SwitchConfig {
         Self {
             polarity,
             enabled: true,
+            trigger_mode: LimitTriggerMode::Polling,
+        }
+    }
+
+    /// Create a switch configuration with interrupt mode.
+    pub fn with_interrupt(polarity: SwitchPolarity) -> Self {
+        Self {
+            polarity,
+            enabled: true,
+            trigger_mode: LimitTriggerMode::Interrupt,
         }
     }
 
@@ -72,7 +100,20 @@ impl SwitchConfig {
         Self {
             polarity: SwitchPolarity::NO,
             enabled: false,
+            trigger_mode: LimitTriggerMode::Polling,
         }
+    }
+
+    /// Set the trigger mode.
+    pub fn with_trigger_mode(mut self, mode: LimitTriggerMode) -> Self {
+        self.trigger_mode = mode;
+        self
+    }
+
+    /// Check if this switch uses interrupt mode.
+    #[inline]
+    pub fn is_interrupt_mode(&self) -> bool {
+        self.trigger_mode == LimitTriggerMode::Interrupt
     }
 
     /// Check if a raw pin state indicates the switch is active/triggered.
