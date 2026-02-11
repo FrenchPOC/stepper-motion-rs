@@ -26,7 +26,7 @@
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use defmt::{info, warn, error};
+use defmt::{error, info, warn};
 use defmt_rtt as _;
 use panic_probe as _;
 
@@ -38,9 +38,8 @@ use embassy_stm32::{bind_interrupts, exti};
 use embassy_time::{Duration, Ticker, Timer};
 
 use stepper_motion::{
-    Degrees, DegreesPerSec,
-    LimitEvent, LimitFlags, LimitHandler, LimitType,
-    SwitchPolarity, HomingConfig, HomingStrategy, HomingDirection,
+    Degrees, DegreesPerSec, HomingConfig, HomingDirection, HomingStrategy, LimitEvent, LimitFlags,
+    LimitHandler, LimitType, SwitchPolarity,
 };
 
 // =============================================================================
@@ -61,7 +60,7 @@ static MOTOR_RUNNING: AtomicBool = AtomicBool::new(false);
 // =============================================================================
 
 /// Callback for min limit switch events
-/// 
+///
 /// This is called directly from the GPIO interrupt handler.
 /// Keep it fast and simple - only set flags!
 fn on_min_limit_triggered(event: LimitEvent) {
@@ -105,11 +104,7 @@ struct AsyncMotor<'d> {
 }
 
 impl<'d> AsyncMotor<'d> {
-    fn new(
-        step_pin: Output<'d>,
-        dir_pin: Output<'d>,
-        enable_pin: Output<'d>,
-    ) -> Self {
+    fn new(step_pin: Output<'d>, dir_pin: Output<'d>, enable_pin: Output<'d>) -> Self {
         Self {
             step_pin,
             dir_pin,
@@ -337,11 +332,11 @@ async fn min_limit_task(mut pin: ExtiInput<'static>) {
     loop {
         // Wait for any edge (both press and release)
         pin.wait_for_any_edge().await;
-        
+
         // Read current pin state and invoke callback
         let pin_high = pin.is_high();
         handler.on_min_limit_interrupt(pin_high);
-        
+
         // Small debounce delay
         Timer::after(Duration::from_millis(5)).await;
     }
@@ -357,10 +352,10 @@ async fn max_limit_task(mut pin: ExtiInput<'static>) {
 
     loop {
         pin.wait_for_any_edge().await;
-        
+
         let pin_high = pin.is_high();
         handler.on_max_limit_interrupt(pin_high);
-        
+
         Timer::after(Duration::from_millis(5)).await;
     }
 }
@@ -371,7 +366,7 @@ async fn home_switch_task(mut pin: ExtiInput<'static>) {
     // Home switch just sets a flag, doesn't trigger emergency stop
     loop {
         pin.wait_for_any_edge().await;
-        
+
         let is_active = !pin.is_high(); // NO switch: LOW = active
         if is_active {
             HOMING_COMPLETE.store(true, Ordering::SeqCst);
@@ -381,7 +376,7 @@ async fn home_switch_task(mut pin: ExtiInput<'static>) {
                 is_activated: true,
             });
         }
-        
+
         Timer::after(Duration::from_millis(5)).await;
     }
 }
@@ -450,11 +445,11 @@ async fn main(spawner: Spawner) {
     let homing_config = HomingConfig {
         strategy: HomingStrategy::HomeSwitchFast,
         direction: HomingDirection::ToMin,
-        fast_velocity: DegreesPerSec(10.0),    // 10 deg/s
-        slow_velocity: DegreesPerSec(2.0),     // 2 deg/s
-        backoff_distance: Degrees(5.0),        // 5 degrees
-        home_offset: Degrees(0.0),             // Home = 0
-        max_travel: Degrees(200.0),            // 200 degrees max
+        fast_velocity: DegreesPerSec(10.0), // 10 deg/s
+        slow_velocity: DegreesPerSec(2.0),  // 2 deg/s
+        backoff_distance: Degrees(5.0),     // 5 degrees
+        home_offset: Degrees(0.0),          // Home = 0
+        max_travel: Degrees(200.0),         // 200 degrees max
         home_position: Degrees(0.0),
     };
 
@@ -481,11 +476,15 @@ async fn main(spawner: Spawner) {
         // Example: Move forward 1000 steps
         defmt::info!("Moving forward 1000 steps...");
         let completed = motor.move_steps(1000, &LIMIT_FLAGS).await;
-        defmt::info!("Completed {} steps, position: {}", completed, motor.position());
+        defmt::info!(
+            "Completed {} steps, position: {}",
+            completed,
+            motor.position()
+        );
 
         if LIMIT_FLAGS.is_emergency_stop() {
             defmt::warn!("Limit triggered! Waiting for clear...");
-            
+
             // Wait for limit to be cleared (switch released)
             while LIMIT_FLAGS.is_emergency_stop() {
                 Timer::after(Duration::from_millis(100)).await;
@@ -500,7 +499,11 @@ async fn main(spawner: Spawner) {
         // Example: Move backward 1000 steps
         defmt::info!("Moving backward 1000 steps...");
         let completed = motor.move_steps(-1000, &LIMIT_FLAGS).await;
-        defmt::info!("Completed {} steps, position: {}", completed, motor.position());
+        defmt::info!(
+            "Completed {} steps, position: {}",
+            completed,
+            motor.position()
+        );
 
         if LIMIT_FLAGS.is_emergency_stop() {
             defmt::warn!("Limit triggered! Waiting for clear...");

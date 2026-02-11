@@ -15,4 +15,4 @@ pub use executor::MotionExecutor;
 pub use profile::{Direction, MotionPhase, MotionProfile};
 
 #[cfg(feature = "async")]
-pub use async_executor::{AsyncMotionExecutor, async_delay_ns, async_delay_us};
+pub use async_executor::{async_delay_ns, async_delay_us, AsyncMotionExecutor};

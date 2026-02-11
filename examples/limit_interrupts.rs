@@ -18,8 +18,7 @@
 use core::sync::atomic::{AtomicU32, Ordering};
 
 use stepper_motion::{
-    LimitEvent, LimitFlags, LimitHandler, LimitType,
-    LimitTriggerMode, SwitchConfig, SwitchPolarity,
+    LimitEvent, LimitFlags, LimitHandler, LimitTriggerMode, LimitType, SwitchConfig, SwitchPolarity,
 };
 
 // Static flags for interrupt-safe communication between ISR and main code
@@ -42,10 +41,16 @@ fn on_limit_triggered(event: LimitEvent) {
     // Log which limit was hit (in real code, use defmt or similar)
     match event.limit_type {
         LimitType::Min => {
-            println!("  [ISR] Min limit triggered! Pin state: {}", event.pin_state);
+            println!(
+                "  [ISR] Min limit triggered! Pin state: {}",
+                event.pin_state
+            );
         }
         LimitType::Max => {
-            println!("  [ISR] Max limit triggered! Pin state: {}", event.pin_state);
+            println!(
+                "  [ISR] Max limit triggered! Pin state: {}",
+                event.pin_state
+            );
         }
     }
 
@@ -94,7 +99,10 @@ fn main() {
 
         // Clear flags after handling
         handler.clear_flags();
-        println!("   After clearing: emergency_stop = {}", handler.is_emergency_stop());
+        println!(
+            "   After clearing: emergency_stop = {}",
+            handler.is_emergency_stop()
+        );
     }
 
     // Example 2: Separate callbacks for each limit
@@ -136,24 +144,34 @@ fn main() {
     {
         // Polling mode (default)
         let switch_polling = SwitchConfig::new(SwitchPolarity::NO);
-        println!("   Polling switch: polarity={:?}, interrupt={}", 
-                 switch_polling.polarity, switch_polling.is_interrupt_mode());
+        println!(
+            "   Polling switch: polarity={:?}, interrupt={}",
+            switch_polling.polarity,
+            switch_polling.is_interrupt_mode()
+        );
 
         // Interrupt mode
         let switch_interrupt = SwitchConfig::with_interrupt(SwitchPolarity::NC);
-        println!("   Interrupt switch: polarity={:?}, interrupt={}", 
-                 switch_interrupt.polarity, switch_interrupt.is_interrupt_mode());
+        println!(
+            "   Interrupt switch: polarity={:?}, interrupt={}",
+            switch_interrupt.polarity,
+            switch_interrupt.is_interrupt_mode()
+        );
 
         // Builder pattern
-        let switch_custom = SwitchConfig::new(SwitchPolarity::NO)
-            .with_trigger_mode(LimitTriggerMode::Interrupt);
-        println!("   Custom switch: polarity={:?}, interrupt={}", 
-                 switch_custom.polarity, switch_custom.is_interrupt_mode());
+        let switch_custom =
+            SwitchConfig::new(SwitchPolarity::NO).with_trigger_mode(LimitTriggerMode::Interrupt);
+        println!(
+            "   Custom switch: polarity={:?}, interrupt={}",
+            switch_custom.polarity,
+            switch_custom.is_interrupt_mode()
+        );
     }
 
     // Example 5: Typical interrupt handler pattern
     println!("\n5. Typical interrupt handler pattern:");
-    println!(r#"
+    println!(
+        r#"
    // In your embedded code:
 
    // 1. Define static flags (accessible from ISR)
@@ -181,11 +199,13 @@ fn main() {
        }}
        motor.step();
    }}
-"#);
+"#
+    );
 
     // Example 6: TOML configuration
     println!("6. TOML Configuration Example:");
-    println!(r#"
+    println!(
+        r#"
    [motors.switches.limit_min]
    polarity = "NO"
    enabled = true
@@ -195,8 +215,12 @@ fn main() {
    polarity = "NC"
    enabled = true
    trigger_mode = "polling"
-"#);
+"#
+    );
 
-    println!("Total callbacks invoked: {}", CALLBACK_COUNT.load(Ordering::SeqCst));
+    println!(
+        "Total callbacks invoked: {}",
+        CALLBACK_COUNT.load(Ordering::SeqCst)
+    );
     println!("\nLimit switch interrupt example complete!");
 }

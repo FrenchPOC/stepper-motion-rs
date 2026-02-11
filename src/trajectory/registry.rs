@@ -75,13 +75,13 @@ impl TrajectoryRegistry {
                 let _ = available.push_str(traj_name);
                 first = false;
             }
-            
+
             let mut msg: heapless::String<64> = heapless::String::new();
             let _ = msg.push_str("'");
             let _ = msg.push_str(name);
             let _ = msg.push_str("' not found. Available: ");
             let _ = msg.push_str(&available);
-            
+
             Error::Trajectory(TrajectoryError::InvalidName(msg))
         })
     }
@@ -118,9 +118,7 @@ impl TrajectoryRegistry {
 
     /// Get an iterator over trajectories.
     pub fn iter(&self) -> impl Iterator<Item = (&str, &TrajectoryConfig)> {
-        self.trajectories
-            .iter()
-            .map(|(k, v)| (k.as_str(), v))
+        self.trajectories.iter().map(|(k, v)| (k.as_str(), v))
     }
 
     /// Clear all trajectories.

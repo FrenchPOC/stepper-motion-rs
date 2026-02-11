@@ -5,9 +5,9 @@
 
 use core::marker::PhantomData;
 
+use embassy_time::{Duration, Timer};
 use embedded_hal::digital::OutputPin;
 use embedded_hal_async::delay::DelayNs as AsyncDelayNs;
-use embassy_time::{Duration, Timer};
 
 use crate::config::units::{Degrees, Steps};
 use crate::config::MechanicalConstraints;
@@ -171,10 +171,13 @@ where
         let delta_steps = target_steps.0 - self.position.steps().0;
 
         if delta_steps == 0 {
-            return Err((self, Error::Motion(crate::error::MotionError::MoveTooShort {
-                steps: 0,
-                minimum: 1,
-            })));
+            return Err((
+                self,
+                Error::Motion(crate::error::MotionError::MoveTooShort {
+                    steps: 0,
+                    minimum: 1,
+                }),
+            ));
         }
 
         // Check limits
@@ -298,19 +301,14 @@ where
     ///
     /// This is the async equivalent of `move_to_blocking`. Other tasks can
     /// run during the step delays.
-    pub async fn move_to_async(
-        self,
-        target: Degrees,
-    ) -> core::result::Result<Self, (Self, Error)> {
+    pub async fn move_to_async(self, target: Degrees) -> core::result::Result<Self, (Self, Error)> {
         match self.move_to(target) {
-            Ok(moving) => {
-                match moving.run_to_completion_async().await {
-                    Ok(idle) => Ok(idle),
-                    Err(e) => {
-                        panic!("Motor step error during async move: {:?}", e);
-                    }
+            Ok(moving) => match moving.run_to_completion_async().await {
+                Ok(idle) => Ok(idle),
+                Err(e) => {
+                    panic!("Motor step error during async move: {:?}", e);
                 }
-            }
+            },
             Err(e) => Err(e),
         }
     }
@@ -429,7 +427,9 @@ where
     ///
     /// This is the async equivalent of `run_to_completion`. Other tasks
     /// can run during the step delays, enabling cooperative multitasking.
-    pub async fn run_to_completion_async(mut self) -> Result<AsyncStepperMotor<STEP, DIR, DELAY, Idle>> {
+    pub async fn run_to_completion_async(
+        mut self,
+    ) -> Result<AsyncStepperMotor<STEP, DIR, DELAY, Idle>> {
         while !self.is_complete() {
             self.step_async().await?;
         }

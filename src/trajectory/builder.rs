@@ -2,8 +2,8 @@
 
 use heapless::String;
 
-use crate::config::{TrajectoryConfig, WaypointTrajectory};
 use crate::config::units::{Degrees, DegreesPerSecSquared};
+use crate::config::{TrajectoryConfig, WaypointTrajectory};
 use crate::error::{Error, Result, TrajectoryError};
 
 /// Builder for creating single-target trajectories.

@@ -6,9 +6,9 @@
 use embedded_hal::delay::DelayNs;
 use embedded_hal::digital::{InputPin, OutputPin};
 
-use crate::config::{HomingConfig, HomingDirection, HomingPhase, HomingStrategy};
-use crate::config::{SwitchConfig, MechanicalConstraints};
 use crate::config::units::Degrees;
+use crate::config::{HomingConfig, HomingDirection, HomingPhase, HomingStrategy};
+use crate::config::{MechanicalConstraints, SwitchConfig};
 use crate::error::{HomingError, MotorError, Result};
 use crate::motion::Direction;
 
@@ -334,8 +334,7 @@ impl HomingExecutor {
         };
 
         // Calculate offset steps
-        self.max_steps_in_phase =
-            (self.config.home_offset.0.abs() * self.steps_per_degree) as i64;
+        self.max_steps_in_phase = (self.config.home_offset.0.abs() * self.steps_per_degree) as i64;
 
         // Use slow interval for offset move
         self.current_interval_ns = self.slow_interval_ns;
@@ -355,7 +354,7 @@ impl HomingExecutor {
 /// # Type Parameters
 ///
 /// - `STEP`: Step pin type
-/// - `DIR`: Direction pin type  
+/// - `DIR`: Direction pin type
 /// - `DELAY`: Delay provider type
 /// - `HOME`: Home switch pin type
 /// - `MIN`: Min limit switch pin type (can be same as HOME if not used)
@@ -460,7 +459,16 @@ where
         step_pin.set_low().map_err(|_| MotorError::PinError)?;
 
         // Advance executor
-        if !executor.step() {
+        let direction_before = executor.direction();
+        let keep_stepping = executor.step();
+
+        // Direction can change while step() still returns true
+        // (Backoff -> SlowApproach), so update DIR immediately.
+        if executor.direction() != direction_before {
+            set_direction(dir_pin, executor.direction(), invert_direction)?;
+        }
+
+        if !keep_stepping {
             if executor.phase() == HomingPhase::Failed {
                 return Err(HomingError::SwitchNotFound {
                     distance_traveled: executor.total_steps() as f32 / constraints.steps_per_degree,
@@ -512,9 +520,137 @@ fn set_direction<DIR: OutputPin>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::HomingConfig;
-    use crate::config::units::{DegreesPerSec, DegreesPerSecSquared, Microsteps};
+    use crate::config::units::{Degrees, DegreesPerSec, DegreesPerSecSquared, Microsteps};
     use crate::config::MotorConfig;
+    use crate::config::{HomingConfig, HomingDirection, SwitchConfig};
+    use core::cell::RefCell;
+    use core::convert::Infallible;
+    use std::rc::Rc;
+
+    struct SimStepPin {
+        sim: Rc<RefCell<HomingSimulation>>,
+        pin_high: bool,
+    }
+
+    impl SimStepPin {
+        fn new(sim: Rc<RefCell<HomingSimulation>>) -> Self {
+            Self {
+                sim,
+                pin_high: false,
+            }
+        }
+    }
+
+    impl embedded_hal::digital::ErrorType for SimStepPin {
+        type Error = Infallible;
+    }
+
+    impl embedded_hal::digital::OutputPin for SimStepPin {
+        fn set_low(&mut self) -> core::result::Result<(), Self::Error> {
+            self.pin_high = false;
+            Ok(())
+        }
+
+        fn set_high(&mut self) -> core::result::Result<(), Self::Error> {
+            if !self.pin_high {
+                self.pin_high = true;
+
+                let mut sim = self.sim.borrow_mut();
+                sim.step_count += 1;
+                sim.position_steps += if sim.dir_pin_high { 1 } else { -1 };
+            }
+            Ok(())
+        }
+    }
+
+    struct SimDirPin {
+        sim: Rc<RefCell<HomingSimulation>>,
+    }
+
+    impl SimDirPin {
+        fn new(sim: Rc<RefCell<HomingSimulation>>) -> Self {
+            Self { sim }
+        }
+
+        fn set_level(&mut self, high: bool) {
+            let mut sim = self.sim.borrow_mut();
+            if sim.dir_pin_high != high {
+                sim.dir_transitions += 1;
+            }
+            sim.dir_pin_high = high;
+        }
+    }
+
+    impl embedded_hal::digital::ErrorType for SimDirPin {
+        type Error = Infallible;
+    }
+
+    impl embedded_hal::digital::OutputPin for SimDirPin {
+        fn set_low(&mut self) -> core::result::Result<(), Self::Error> {
+            self.set_level(false);
+            Ok(())
+        }
+
+        fn set_high(&mut self) -> core::result::Result<(), Self::Error> {
+            self.set_level(true);
+            Ok(())
+        }
+    }
+
+    struct SimHomePin {
+        sim: Rc<RefCell<HomingSimulation>>,
+    }
+
+    impl SimHomePin {
+        fn new(sim: Rc<RefCell<HomingSimulation>>) -> Self {
+            Self { sim }
+        }
+    }
+
+    impl embedded_hal::digital::ErrorType for SimHomePin {
+        type Error = Infallible;
+    }
+
+    impl embedded_hal::digital::InputPin for SimHomePin {
+        fn is_high(&mut self) -> core::result::Result<bool, Self::Error> {
+            // NO switch behavior: high = not triggered, low = triggered.
+            Ok(!self.sim.borrow().home_triggered())
+        }
+
+        fn is_low(&mut self) -> core::result::Result<bool, Self::Error> {
+            Ok(self.sim.borrow().home_triggered())
+        }
+    }
+
+    #[derive(Default)]
+    struct SimDelay;
+
+    impl embedded_hal::delay::DelayNs for SimDelay {
+        fn delay_ns(&mut self, _ns: u32) {}
+    }
+
+    #[derive(Default)]
+    struct HomingSimulation {
+        position_steps: i64,
+        dir_pin_high: bool,
+        dir_transitions: usize,
+        step_count: usize,
+    }
+
+    impl HomingSimulation {
+        fn new(initial_position_steps: i64) -> Self {
+            Self {
+                // Start high so the first direction write is observable.
+                dir_pin_high: true,
+                position_steps: initial_position_steps,
+                ..Self::default()
+            }
+        }
+
+        fn home_triggered(&self) -> bool {
+            self.position_steps <= 0
+        }
+    }
 
     fn make_test_constraints() -> MechanicalConstraints {
         let config = MotorConfig {
@@ -531,6 +667,13 @@ mod tests {
             homing: None,
         };
         MechanicalConstraints::from_config(&config)
+    }
+
+    fn make_regression_homing_config() -> HomingConfig {
+        HomingConfig::home_switch(HomingDirection::ToMin)
+            .with_backoff(Degrees(0.5))
+            .with_max_travel(Degrees(20.0))
+            .with_offset(Degrees(0.0))
     }
 
     #[test]
@@ -557,5 +700,76 @@ mod tests {
         // Trigger switch
         executor.on_home_switch_triggered();
         assert_eq!(executor.phase(), HomingPhase::Backoff);
+    }
+
+    #[test]
+    fn test_homing_executor_step_flips_direction_on_backoff_to_slow_approach() {
+        let config = make_regression_homing_config();
+        let constraints = make_test_constraints();
+        let mut executor = HomingExecutor::new(config, &constraints);
+
+        executor.on_home_switch_triggered();
+        assert_eq!(executor.phase(), HomingPhase::Backoff);
+        assert_eq!(executor.direction(), Direction::Clockwise);
+
+        let mut transitioned = false;
+        for _ in 0..16 {
+            let direction_before = executor.direction();
+            let keep_stepping = executor.step();
+
+            if executor.phase() == HomingPhase::SlowApproach {
+                transitioned = true;
+                assert!(keep_stepping);
+                assert_eq!(direction_before, Direction::Clockwise);
+                assert_eq!(executor.direction(), Direction::CounterClockwise);
+                break;
+            }
+        }
+
+        assert!(transitioned, "executor never transitioned to slow approach");
+    }
+
+    #[test]
+    fn test_execute_homing_blocking_reapproaches_home_after_backoff() {
+        let constraints = make_test_constraints();
+        let config = make_regression_homing_config();
+
+        // Start off-switch so fast approach hits once, then require backoff+re-approach.
+        let sim = Rc::new(RefCell::new(HomingSimulation::new(6)));
+
+        let mut step_pin = SimStepPin::new(sim.clone());
+        let mut dir_pin = SimDirPin::new(sim.clone());
+        let mut home_pin = SimHomePin::new(sim.clone());
+        let mut delay = SimDelay;
+
+        let mut switches: HomingSwitches<'_, SimHomePin, SimHomePin, SimHomePin> =
+            HomingSwitches::new(
+                Some(&mut home_pin),
+                Some(SwitchConfig::default()),
+                None,
+                None,
+                None,
+                None,
+            );
+
+        let result = execute_homing_blocking(
+            &mut step_pin,
+            &mut dir_pin,
+            &mut delay,
+            &mut switches,
+            config,
+            &constraints,
+            false,
+        );
+
+        assert!(
+            result.is_ok(),
+            "homing should complete after slow re-approach, got {result:?}",
+        );
+
+        let sim = sim.borrow();
+        assert!(sim.home_triggered(), "simulation should end on home switch");
+        assert_eq!(sim.dir_transitions, 3);
+        assert!(sim.step_count > 0);
     }
 }

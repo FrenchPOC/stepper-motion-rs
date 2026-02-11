@@ -138,15 +138,15 @@ velocity_percent = 75
     println!("  Steps/rev: {}", motor_config.steps_per_revolution);
     println!("  Microsteps: {:?}", motor_config.microsteps);
     println!("  Gear ratio: {}", motor_config.gear_ratio);
-    println!(
-        "  Max velocity: {} °/s",
-        motor_config.max_velocity.value()
-    );
+    println!("  Max velocity: {} °/s", motor_config.max_velocity.value());
     println!(
         "  Max acceleration: {} °/s²",
         motor_config.max_acceleration.value()
     );
-    println!("  Total steps/rev: {}", motor_config.total_steps_per_revolution());
+    println!(
+        "  Total steps/rev: {}",
+        motor_config.total_steps_per_revolution()
+    );
     println!("  Steps/degree: {:.2}", motor_config.steps_per_degree());
     println!();
 
@@ -190,18 +190,17 @@ velocity_percent = 75
     for name in trajectory_names {
         if let Some(traj) = registry.get(name) {
             // Calculate steps for this move (from position 0)
-            let target_steps = constraints.degrees_to_steps(traj.target_degrees.value()).abs() as u32;
+            let target_steps = constraints
+                .degrees_to_steps(traj.target_degrees.value())
+                .abs() as u32;
 
             // Get motion parameters
-            let velocity_steps = constraints.velocity_to_steps(
-                traj.effective_velocity(&constraints),
-            );
-            let accel_steps = constraints.acceleration_to_steps(
-                traj.effective_acceleration(&constraints),
-            );
-            let decel_steps = constraints.acceleration_to_steps(
-                traj.effective_deceleration(&constraints),
-            );
+            let velocity_steps =
+                constraints.velocity_to_steps(traj.effective_velocity(&constraints));
+            let accel_steps =
+                constraints.acceleration_to_steps(traj.effective_acceleration(&constraints));
+            let decel_steps =
+                constraints.acceleration_to_steps(traj.effective_deceleration(&constraints));
 
             let profile = MotionProfile::asymmetric_trapezoidal(
                 target_steps as i64,

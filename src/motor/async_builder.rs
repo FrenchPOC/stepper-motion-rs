@@ -223,9 +223,10 @@ where
 
             // Create a temporary MotorConfig to use from_config
             let temp_config = MotorConfig {
-                name: self.name.clone().unwrap_or_else(|| {
-                    heapless::String::try_from("unnamed").unwrap_or_default()
-                }),
+                name: self
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| heapless::String::try_from("unnamed").unwrap_or_default()),
                 steps_per_revolution,
                 microsteps,
                 gear_ratio: self.gear_ratio,
@@ -241,9 +242,9 @@ where
             MechanicalConstraints::from_config(&temp_config)
         };
 
-        let name = self.name.unwrap_or_else(|| {
-            heapless::String::try_from("unnamed").unwrap_or_default()
-        });
+        let name = self
+            .name
+            .unwrap_or_else(|| heapless::String::try_from("unnamed").unwrap_or_default());
 
         Ok(AsyncStepperMotor::new(
             step_pin,

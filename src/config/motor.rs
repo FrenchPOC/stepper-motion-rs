@@ -60,8 +60,7 @@ fn default_gear_ratio() -> f32 {
 impl MotorConfig {
     /// Calculate total steps per output shaft revolution.
     pub fn total_steps_per_revolution(&self) -> u32 {
-        (self.steps_per_revolution as f32 * self.microsteps.value() as f32 * self.gear_ratio)
-            as u32
+        (self.steps_per_revolution as f32 * self.microsteps.value() as f32 * self.gear_ratio) as u32
     }
 
     /// Calculate steps per degree of output rotation.

@@ -122,11 +122,11 @@ impl Default for HomingConfig {
         Self {
             strategy: HomingStrategy::HomeSwitch,
             direction: HomingDirection::ToMin,
-            fast_velocity: DegreesPerSec(90.0),   // 90 deg/sec
-            slow_velocity: DegreesPerSec(10.0),   // 10 deg/sec
-            backoff_distance: Degrees(5.0),        // 5 degrees
+            fast_velocity: DegreesPerSec(90.0), // 90 deg/sec
+            slow_velocity: DegreesPerSec(10.0), // 10 deg/sec
+            backoff_distance: Degrees(5.0),     // 5 degrees
             home_offset: Degrees(0.0),
-            max_travel: Degrees(400.0),            // Slightly more than one revolution
+            max_travel: Degrees(400.0), // Slightly more than one revolution
             home_position: Degrees(0.0),
         }
     }

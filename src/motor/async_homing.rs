@@ -6,8 +6,8 @@
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::delay::DelayNs as AsyncDelayNs;
 
-use crate::config::{HomingConfig, HomingPhase, HomingStrategy};
 use crate::config::MechanicalConstraints;
+use crate::config::{HomingConfig, HomingPhase, HomingStrategy};
 use crate::error::{HomingError, MotorError, Result};
 use crate::motion::Direction;
 
@@ -21,7 +21,7 @@ use super::homing::{HomingExecutor, HomingSwitches};
 /// # Type Parameters
 ///
 /// - `STEP`: Step pin type
-/// - `DIR`: Direction pin type  
+/// - `DIR`: Direction pin type
 /// - `DELAY`: Async delay provider type
 /// - `HOME`: Home switch pin type
 /// - `MIN`: Min limit switch pin type
@@ -59,8 +59,7 @@ where
 {
     // Verify we have a home switch for strategies that require it
     match config.strategy {
-        HomingStrategy::HomeSwitch
-        | HomingStrategy::HomeSwitchFast => {
+        HomingStrategy::HomeSwitch | HomingStrategy::HomeSwitchFast => {
             if switches.home.is_none() {
                 return Err(HomingError::NoHomeSwitchConfigured.into());
             }
@@ -127,7 +126,16 @@ where
         step_pin.set_low().map_err(|_| MotorError::PinError)?;
 
         // Advance executor
-        if !executor.step() {
+        let direction_before = executor.direction();
+        let keep_stepping = executor.step();
+
+        // Direction can change while step() still returns true
+        // (Backoff -> SlowApproach), so update DIR immediately.
+        if executor.direction() != direction_before {
+            set_direction_async(dir_pin, executor.direction(), invert_direction)?;
+        }
+
+        if !keep_stepping {
             if executor.phase() == HomingPhase::Failed {
                 return Err(HomingError::SwitchNotFound {
                     distance_traveled: executor.total_steps() as f32 / constraints.steps_per_degree,

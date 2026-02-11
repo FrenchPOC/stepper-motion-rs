@@ -28,10 +28,9 @@ use embedded_hal::delay::DelayNs;
 use embedded_hal::digital::{InputPin, OutputPin};
 
 use stepper_motion::{
-    HomingConfig, HomingDirection, HomingSwitches,
-    SwitchConfig, SwitchPolarity, SwitchesConfig,
-    config::{MechanicalConstraints, MotorConfig},
     config::units::{Degrees, DegreesPerSec, DegreesPerSecSquared, Microsteps},
+    config::{MechanicalConstraints, MotorConfig},
+    HomingConfig, HomingDirection, HomingSwitches, SwitchConfig, SwitchPolarity, SwitchesConfig,
 };
 
 /// Mock output pin for demonstration
@@ -138,19 +137,22 @@ fn main() {
 
     // Example 2: Switches configuration in motor config
     println!("\n2. Motor Configuration with Switches:");
-    
+
     let switches_config = SwitchesConfig::with_limits(
-        SwitchPolarity::NO,  // Home switch is NO
-        SwitchPolarity::NC,  // Min limit is NC
-        SwitchPolarity::NC,  // Max limit is NC
+        SwitchPolarity::NO, // Home switch is NO
+        SwitchPolarity::NC, // Min limit is NC
+        SwitchPolarity::NC, // Max limit is NC
     );
-    
+
     println!("   Has home switch: {}", switches_config.has_home_switch());
-    println!("   Has limit switches: {}", switches_config.has_limit_switches());
+    println!(
+        "   Has limit switches: {}",
+        switches_config.has_limit_switches()
+    );
 
     // Example 3: Homing configuration
     println!("\n3. Homing Configuration:");
-    
+
     let homing_config = HomingConfig::home_switch(HomingDirection::ToMin)
         .with_fast_velocity(DegreesPerSec(90.0))
         .with_slow_velocity(DegreesPerSec(10.0))
@@ -167,12 +169,12 @@ fn main() {
 
     // Example 4: Create mock hardware for demonstration
     println!("\n4. Simulated Homing Sequence:");
-    
+
     // In real code, these would be actual GPIO pins
     let mut step_pin = MockOutputPin::new();
     let mut dir_pin = MockOutputPin::new();
     let mut delay = MockDelay;
-    
+
     // Create mock switches - home switch triggers after 1000 steps
     let mut home_switch = MockSwitch::new().trigger_after_steps(1000);
     let mut min_limit = MockSwitch::new();
@@ -213,7 +215,8 @@ fn main() {
 
     // Show TOML configuration example
     println!("5. TOML Configuration Example:");
-    println!(r#"
+    println!(
+        r#"
    [[motors]]
    name = "x_axis"
    steps_per_revolution = 200
@@ -244,7 +247,8 @@ fn main() {
    backoff_degrees = 5.0
    max_travel_degrees = 400.0
    home_position_degrees = 0.0
-"#);
+"#
+    );
 
     println!("Homing example complete!");
 }

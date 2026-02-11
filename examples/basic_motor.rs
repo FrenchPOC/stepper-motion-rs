@@ -13,8 +13,8 @@
 
 use stepper_motion::{
     config::units::{Degrees, DegreesPerSec, DegreesPerSecSquared, Microsteps},
-    motor::StepperMotorBuilder,
     motion::MotionProfile,
+    motor::StepperMotorBuilder,
 };
 
 /// Mock delay provider for demonstration.
@@ -77,7 +77,8 @@ fn main() {
         .expect("Failed to build motor");
 
     println!("Motor created: {}", motor.name());
-    println!("Initial position: {} steps ({} degrees)",
+    println!(
+        "Initial position: {} steps ({} degrees)",
         motor.position_steps().0,
         motor.position_degrees().0
     );
@@ -87,29 +88,36 @@ fn main() {
     // Mechanical Constraints Demonstration
     // ========================================================================
     println!("\n=== Mechanical Constraints (Unit Conversion) ===");
-    
+
     // Access the motor's constraints for unit conversion
     let constraints = motor.constraints();
-    
+
     println!("Motor configuration:");
-    println!("  Steps/revolution: {} (base 200 × 16 microsteps)", constraints.steps_per_revolution);
+    println!(
+        "  Steps/revolution: {} (base 200 × 16 microsteps)",
+        constraints.steps_per_revolution
+    );
     println!("  Steps/degree: {:.4}", constraints.steps_per_degree);
-    println!("  Max velocity: {:.2}°/s = {:.0} steps/s", 
-        constraints.max_velocity.0, 
-        constraints.max_velocity_steps_per_sec);
-    println!("  Max acceleration: {:.2}°/s² = {:.0} steps/s²",
-        constraints.max_acceleration.0,
-        constraints.max_acceleration_steps_per_sec2);
-    println!("  Min step interval: {} ns ({:.0} kHz max)", 
+    println!(
+        "  Max velocity: {:.2}°/s = {:.0} steps/s",
+        constraints.max_velocity.0, constraints.max_velocity_steps_per_sec
+    );
+    println!(
+        "  Max acceleration: {:.2}°/s² = {:.0} steps/s²",
+        constraints.max_acceleration.0, constraints.max_acceleration_steps_per_sec2
+    );
+    println!(
+        "  Min step interval: {} ns ({:.0} kHz max)",
         constraints.min_step_interval_ns,
-        1_000_000_000.0 / constraints.min_step_interval_ns as f64 / 1000.0);
-    
+        1_000_000_000.0 / constraints.min_step_interval_ns as f64 / 1000.0
+    );
+
     // Demonstrate unit conversions
     println!("\nUnit conversions:");
     let target_degrees = Degrees(90.0);
     let target_steps = (target_degrees.0 * constraints.steps_per_degree) as i64;
     println!("  90° = {} steps", target_steps);
-    
+
     let target_degrees = Degrees(360.0);
     let target_steps = (target_degrees.0 * constraints.steps_per_degree) as i64;
     println!("  360° (1 rev) = {} steps", target_steps);
@@ -117,10 +125,10 @@ fn main() {
     // ========================================================================
     // Motion Profile Demonstration
     // ========================================================================
-    
+
     // Demonstrate motion profile calculation
     let profile = MotionProfile::asymmetric_trapezoidal(
-        3200,  // steps (1 full revolution at 16x microstepping)
+        3200,   // steps (1 full revolution at 16x microstepping)
         3200.0, // max velocity (steps/sec)
         6400.0, // acceleration (steps/sec²)
         3200.0, // deceleration (steps/sec²) - slower decel for smooth stop
@@ -134,11 +142,14 @@ fn main() {
     println!("Deceleration phase: {} steps", profile.decel_steps);
     println!("Initial interval: {} ns", profile.initial_interval_ns);
     println!("Cruise interval: {} ns", profile.cruise_interval_ns);
-    println!("Estimated duration: {:.3} seconds", profile.estimated_duration_secs());
+    println!(
+        "Estimated duration: {:.3} seconds",
+        profile.estimated_duration_secs()
+    );
 
     // Load configuration from TOML (if available)
     println!("\n=== Configuration Loading ===");
-    
+
     let toml_content = r#"
 [motors.demo]
 name = "demo_motor"
@@ -166,10 +177,11 @@ target_degrees = 90.0
 velocity_percent = 100
 "#;
 
-    let config: stepper_motion::SystemConfig = toml::from_str(toml_content)
-        .expect("Failed to parse config");
+    let config: stepper_motion::SystemConfig =
+        toml::from_str(toml_content).expect("Failed to parse config");
 
-    println!("Loaded configuration with {} motor(s) and {} trajectory(ies)",
+    println!(
+        "Loaded configuration with {} motor(s) and {} trajectory(ies)",
         config.motors.len(),
         config.trajectories.len()
     );
@@ -183,7 +195,14 @@ velocity_percent = 100
         println!("\nTrajectory 'home':");
         println!("  Target: {} degrees", home_traj.target_degrees.0);
         println!("  Velocity: {}% of max", home_traj.velocity_percent);
-        println!("  Asymmetric: {}", if home_traj.is_asymmetric() { "yes" } else { "no" });
+        println!(
+            "  Asymmetric: {}",
+            if home_traj.is_asymmetric() {
+                "yes"
+            } else {
+                "no"
+            }
+        );
         if let Some(accel) = home_traj.acceleration {
             println!("  Acceleration: {} deg/s²", accel.0);
         }

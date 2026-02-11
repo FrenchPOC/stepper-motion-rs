@@ -154,11 +154,11 @@ where
 
     /// Configure from SystemConfig by motor name.
     pub fn from_config(self, config: &SystemConfig, motor_name: &str) -> Result<Self> {
-        let motor_config = config
-            .motor(motor_name)
-            .ok_or_else(|| Error::Config(ConfigError::MotorNotFound(
+        let motor_config = config.motor(motor_name).ok_or_else(|| {
+            Error::Config(ConfigError::MotorNotFound(
                 heapless::String::try_from(motor_name).unwrap_or_default(),
-            )))?;
+            ))
+        })?;
 
         Ok(self.from_motor_config(motor_config))
     }
@@ -187,9 +187,9 @@ where
             ))
         })?;
 
-        let name = self.name.unwrap_or_else(|| {
-            heapless::String::try_from("motor").unwrap()
-        });
+        let name = self
+            .name
+            .unwrap_or_else(|| heapless::String::try_from("motor").unwrap());
 
         let constraints = if let Some(c) = self.constraints {
             c

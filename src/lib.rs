@@ -75,13 +75,13 @@ pub mod motor;
 pub mod trajectory;
 
 // Re-exports for ergonomic API
-pub use config::{MotorConfig, SystemConfig, TrajectoryConfig, validate_config};
+pub use config::{validate_config, MotorConfig, SystemConfig, TrajectoryConfig};
 pub use config::{HomingConfig, HomingDirection, HomingPhase, HomingStrategy};
-pub use config::{SwitchConfig, SwitchPolarity, SwitchesConfig, LimitTriggerMode};
+pub use config::{LimitTriggerMode, SwitchConfig, SwitchPolarity, SwitchesConfig};
 pub use error::{Error, HomingError, Result};
 pub use motion::{Direction, MotionPhase, MotionProfile};
-pub use motor::{state, MotorSystem, StepperMotor};
 pub use motor::{execute_homing_blocking, HomingExecutor, HomingSwitches};
+pub use motor::{state, MotorSystem, StepperMotor};
 pub use motor::{LimitCallback, LimitEvent, LimitFlags, LimitHandler, LimitType};
 pub use trajectory::TrajectoryRegistry;
 
@@ -94,8 +94,8 @@ pub use config::units::{Degrees, DegreesPerSec, DegreesPerSecSquared, Microsteps
 
 // Async re-exports (async feature only)
 #[cfg(feature = "async")]
-pub use motion::{AsyncMotionExecutor, async_delay_ns, async_delay_us};
-#[cfg(feature = "async")]
-pub use motor::{AsyncMotorRunner, AsyncMotorSystem, AsyncStepperMotor, AsyncStepperMotorBuilder};
+pub use motion::{async_delay_ns, async_delay_us, AsyncMotionExecutor};
 #[cfg(feature = "async")]
 pub use motor::execute_homing_async;
+#[cfg(feature = "async")]
+pub use motor::{AsyncMotorRunner, AsyncMotorSystem, AsyncStepperMotor, AsyncStepperMotorBuilder};

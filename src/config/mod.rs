@@ -5,14 +5,14 @@
 
 mod homing;
 mod limits;
+#[cfg(feature = "std")]
+mod loader;
 mod mechanical;
 mod motor;
 mod switches;
 mod system;
 mod trajectory;
 pub mod units;
-#[cfg(feature = "std")]
-mod loader;
 mod validation;
 
 pub use homing::{HomingConfig, HomingDirection, HomingPhase, HomingStrategy};

@@ -135,28 +135,33 @@ velocity_percent = 100
             let constraints = MechanicalConstraints::from_config(motor_config);
 
             println!("\n{}: {}", motor_name.to_uppercase(), motor_config.name);
-            println!("  Steps/rev: {} × {} microsteps × {} gear = {} total steps/rev",
+            println!(
+                "  Steps/rev: {} × {} microsteps × {} gear = {} total steps/rev",
                 motor_config.steps_per_revolution,
                 motor_config.microsteps.value(),
                 motor_config.gear_ratio,
                 motor_config.total_steps_per_revolution()
             );
-            println!("  Resolution: {:.4}° per step ({:.2} steps/degree)",
+            println!(
+                "  Resolution: {:.4}° per step ({:.2} steps/degree)",
                 360.0 / motor_config.total_steps_per_revolution() as f32,
                 motor_config.steps_per_degree()
             );
-            println!("  Max velocity: {}°/s ({:.0} steps/s)",
+            println!(
+                "  Max velocity: {}°/s ({:.0} steps/s)",
                 motor_config.max_velocity.value(),
                 constraints.max_velocity_steps_per_sec
             );
-            println!("  Max accel: {}°/s² ({:.0} steps/s²)",
+            println!(
+                "  Max accel: {}°/s² ({:.0} steps/s²)",
                 motor_config.max_acceleration.value(),
                 constraints.max_acceleration_steps_per_sec2
             );
             println!("  Direction inverted: {}", motor_config.invert_direction);
 
             if let Some(limits) = &motor_config.limits {
-                println!("  Limits: {}° to {}° ({:?})",
+                println!(
+                    "  Limits: {}° to {}° ({:?})",
                     limits.min.value(),
                     limits.max.value(),
                     limits.policy
@@ -184,7 +189,9 @@ velocity_percent = 100
         for traj_name in registry.names() {
             if let Some(traj) = registry.get(traj_name) {
                 if traj.motor.as_str() == motor_name {
-                    let target_steps = constraints.degrees_to_steps(traj.target_degrees.value()).abs() as u32;
+                    let target_steps = constraints
+                        .degrees_to_steps(traj.target_degrees.value())
+                        .abs() as u32;
                     let velocity = traj.effective_velocity(&constraints);
                     let accel = traj.effective_acceleration(&constraints);
                     let decel = traj.effective_deceleration(&constraints);
@@ -198,7 +205,8 @@ velocity_percent = 100
 
                     let profile_type = if traj.is_asymmetric() { "A" } else { "S" };
 
-                    println!("  {} [{}]: {}° → {:.3}s",
+                    println!(
+                        "  {} [{}]: {}° → {:.3}s",
                         traj_name,
                         profile_type,
                         traj.target_degrees.value(),
@@ -214,7 +222,12 @@ velocity_percent = 100
     println!("{}", "=".repeat(70));
 
     for (name, seq) in &config.sequences {
-        print!("\n{}: {} waypoints on {} | ", name, seq.waypoints.len(), seq.motor);
+        print!(
+            "\n{}: {} waypoints on {} | ",
+            name,
+            seq.waypoints.len(),
+            seq.motor
+        );
         for (i, wp) in seq.waypoints.iter().enumerate() {
             if i > 0 {
                 print!("→");
@@ -222,7 +235,10 @@ velocity_percent = 100
             print!("{}°", wp.value());
         }
         println!();
-        println!("  Dwell: {}ms, Velocity: {}%", seq.dwell_ms, seq.velocity_percent);
+        println!(
+            "  Dwell: {}ms, Velocity: {}%",
+            seq.dwell_ms, seq.velocity_percent
+        );
     }
 
     // Demonstrate motor selection for a coordinated move
@@ -239,7 +255,9 @@ velocity_percent = 100
         if let Some(traj) = registry.get(traj_name) {
             if let Some(motor_config) = config.motor(&traj.motor) {
                 let constraints = MechanicalConstraints::from_config(motor_config);
-                let target_steps = constraints.degrees_to_steps(traj.target_degrees.value()).abs() as u32;
+                let target_steps = constraints
+                    .degrees_to_steps(traj.target_degrees.value())
+                    .abs() as u32;
 
                 let profile = MotionProfile::asymmetric_trapezoidal(
                     target_steps as i64,
@@ -251,8 +269,10 @@ velocity_percent = 100
                 let duration = profile.estimated_duration_secs();
                 total_duration = total_duration.max(duration);
 
-                println!("  {} → {} home: {:.3}s ({} steps)",
-                    traj_name, traj.motor, duration, target_steps);
+                println!(
+                    "  {} → {} home: {:.3}s ({} steps)",
+                    traj_name, traj.motor, duration, target_steps
+                );
             }
         }
     }

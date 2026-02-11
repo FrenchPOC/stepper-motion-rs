@@ -156,11 +156,7 @@ impl MotionProfile {
     }
 
     /// Create a symmetric trapezoidal profile (same accel and decel).
-    pub fn symmetric_trapezoidal(
-        total_steps: i64,
-        max_velocity: f32,
-        acceleration: f32,
-    ) -> Self {
+    pub fn symmetric_trapezoidal(total_steps: i64, max_velocity: f32, acceleration: f32) -> Self {
         Self::asymmetric_trapezoidal(total_steps, max_velocity, acceleration, acceleration)
     }
 

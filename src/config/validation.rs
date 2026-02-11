@@ -33,7 +33,9 @@ pub fn validate_config(config: &SystemConfig) -> Result<()> {
 fn validate_motor(_name: &str, config: &super::MotorConfig) -> Result<()> {
     // Gear ratio must be positive
     if config.gear_ratio <= 0.0 {
-        return Err(Error::Config(ConfigError::InvalidGearRatio(config.gear_ratio)));
+        return Err(Error::Config(ConfigError::InvalidGearRatio(
+            config.gear_ratio,
+        )));
     }
 
     // Max velocity must be positive

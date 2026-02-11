@@ -21,8 +21,8 @@
 #![cfg(feature = "async")]
 
 use stepper_motion::{
-    AsyncMotorSystem, AsyncStepperMotor, AsyncStepperMotorBuilder,
     config::units::{Degrees, DegreesPerSec, DegreesPerSecSquared, Microsteps},
+    AsyncMotorSystem, AsyncStepperMotor, AsyncStepperMotorBuilder,
 };
 
 // Mock types for demonstration (in real code, use your HAL's types)
@@ -132,12 +132,11 @@ velocity_percent = 100
 "#;
 
     // Parse configuration
-    let config: stepper_motion::SystemConfig = toml::from_str(config_toml)
-        .map_err(|e| stepper_motion::Error::Config(
-            stepper_motion::error::ConfigError::ParseError(
-                heapless::String::try_from(e.to_string().as_str()).unwrap_or_default()
-            )
-        ))?;
+    let config: stepper_motion::SystemConfig = toml::from_str(config_toml).map_err(|e| {
+        stepper_motion::Error::Config(stepper_motion::error::ConfigError::ParseError(
+            heapless::String::try_from(e.to_string().as_str()).unwrap_or_default(),
+        ))
+    })?;
 
     // Create async motor system
     let mut system = AsyncMotorSystem::from_config(config);
@@ -146,13 +145,17 @@ velocity_percent = 100
     let motor = system.register_motor("x_axis", MockPin, MockPin, MockDelay)?;
 
     // Execute trajectory asynchronously
-    let motor = motor.execute_async("home_x", system.trajectories()).await
+    let motor = motor
+        .execute_async("home_x", system.trajectories())
+        .await
         .map_err(|(_, e)| e)?;
 
     println!("After home: {:?}", motor.position_degrees());
 
     // Execute another trajectory
-    let motor = motor.execute_async("scan_x", system.trajectories()).await
+    let motor = motor
+        .execute_async("scan_x", system.trajectories())
+        .await
         .map_err(|(_, e)| e)?;
 
     println!("After scan: {:?}", motor.position_degrees());
@@ -190,7 +193,10 @@ async fn cooperative_example() {
     // During each step's delay, other async tasks can execute
     match moving_motor.run_to_completion_async().await {
         Ok(idle_motor) => {
-            println!("Move complete! Position: {:?}", idle_motor.position_degrees());
+            println!(
+                "Move complete! Position: {:?}",
+                idle_motor.position_degrees()
+            );
         }
         Err(e) => {
             println!("Move failed: {:?}", e);
@@ -209,7 +215,8 @@ fn main() {
     println!();
     println!("Example code structure:");
     println!();
-    println!(r#"
+    println!(
+        r#"
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {{
     let p = embassy_stm32::init(Default::default());
@@ -231,5 +238,6 @@ async fn main(_spawner: Spawner) {{
     // Non-blocking move - other tasks can run during delays
     let motor = motor.move_to_async(Degrees(90.0)).await.unwrap();
 }}
-"#);
+"#
+    );
 }

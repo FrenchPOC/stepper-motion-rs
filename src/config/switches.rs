@@ -52,7 +52,7 @@ pub struct SwitchConfig {
     /// Switch polarity (NO or NC).
     #[serde(default)]
     pub polarity: SwitchPolarity,
-    
+
     /// Whether this switch is enabled/connected.
     #[serde(default = "default_enabled")]
     pub enabled: bool,
@@ -225,11 +225,8 @@ mod tests {
         assert!(config.has_home_switch());
         assert!(!config.has_limit_switches());
 
-        let config = SwitchesConfig::with_limits(
-            SwitchPolarity::NO,
-            SwitchPolarity::NC,
-            SwitchPolarity::NC,
-        );
+        let config =
+            SwitchesConfig::with_limits(SwitchPolarity::NO, SwitchPolarity::NC, SwitchPolarity::NC);
         assert!(config.has_switches());
         assert!(config.has_home_switch());
         assert!(config.has_limit_switches());

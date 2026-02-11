@@ -145,10 +145,13 @@ where
 
         if delta_steps == 0 {
             // Already at target, return self unchanged
-            return Err((self, Error::Motion(crate::error::MotionError::MoveTooShort {
-                steps: 0,
-                minimum: 1,
-            })));
+            return Err((
+                self,
+                Error::Motion(crate::error::MotionError::MoveTooShort {
+                    steps: 0,
+                    minimum: 1,
+                }),
+            ));
         }
 
         // Check limits - extract limit value before potentially moving self
@@ -288,10 +291,7 @@ where
     /// Move to an absolute position and run to completion (blocking).
     ///
     /// This is a convenience method that combines `move_to` and `run_to_completion`.
-    pub fn move_to_blocking(
-        self,
-        target: Degrees,
-    ) -> core::result::Result<Self, (Self, Error)> {
+    pub fn move_to_blocking(self, target: Degrees) -> core::result::Result<Self, (Self, Error)> {
         match self.move_to(target) {
             Ok(moving) => {
                 match moving.run_to_completion() {

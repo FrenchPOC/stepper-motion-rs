@@ -181,19 +181,37 @@ impl fmt::Display for ConfigError {
         match self {
             ConfigError::ParseError(msg) => write!(f, "Parse error: {}", msg),
             ConfigError::InvalidMicrosteps(v) => {
-                write!(f, "Invalid microsteps: {}. Valid values: 1, 2, 4, 8, 16, 32, 64, 128, 256", v)
+                write!(
+                    f,
+                    "Invalid microsteps: {}. Valid values: 1, 2, 4, 8, 16, 32, 64, 128, 256",
+                    v
+                )
             }
             ConfigError::MotorNotFound(name) => write!(f, "Motor '{}' not found", name),
             ConfigError::TrajectoryNotFound(name) => write!(f, "Trajectory '{}' not found", name),
             ConfigError::DuplicateMotorName(name) => write!(f, "Duplicate motor name: '{}'", name),
-            ConfigError::DuplicateTrajectoryName(name) => write!(f, "Duplicate trajectory name: '{}'", name),
-            ConfigError::InvalidVelocityPercent(v) => write!(f, "Invalid velocity percent: {}. Must be 1-200", v),
-            ConfigError::InvalidAccelerationPercent(v) => write!(f, "Invalid acceleration percent: {}. Must be 1-200", v),
+            ConfigError::DuplicateTrajectoryName(name) => {
+                write!(f, "Duplicate trajectory name: '{}'", name)
+            }
+            ConfigError::InvalidVelocityPercent(v) => {
+                write!(f, "Invalid velocity percent: {}. Must be 1-200", v)
+            }
+            ConfigError::InvalidAccelerationPercent(v) => {
+                write!(f, "Invalid acceleration percent: {}. Must be 1-200", v)
+            }
             ConfigError::InvalidGearRatio(v) => write!(f, "Invalid gear ratio: {}. Must be > 0", v),
-            ConfigError::InvalidMaxVelocity(v) => write!(f, "Invalid max velocity: {}. Must be > 0", v),
-            ConfigError::InvalidMaxAcceleration(v) => write!(f, "Invalid max acceleration: {}. Must be > 0", v),
+            ConfigError::InvalidMaxVelocity(v) => {
+                write!(f, "Invalid max velocity: {}. Must be > 0", v)
+            }
+            ConfigError::InvalidMaxAcceleration(v) => {
+                write!(f, "Invalid max acceleration: {}. Must be > 0", v)
+            }
             ConfigError::InvalidSoftLimits { min, max } => {
-                write!(f, "Invalid soft limits: min ({}) must be < max ({})", min, max)
+                write!(
+                    f,
+                    "Invalid soft limits: min ({}) must be < max ({})",
+                    min, max
+                )
             }
             #[cfg(feature = "std")]
             ConfigError::IoError(msg) => write!(f, "I/O error: {}", msg),
@@ -250,13 +268,25 @@ impl fmt::Display for MotionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             MotionError::VelocityExceedsLimit { requested, max } => {
-                write!(f, "Requested velocity {} exceeds maximum {}", requested, max)
+                write!(
+                    f,
+                    "Requested velocity {} exceeds maximum {}",
+                    requested, max
+                )
             }
             MotionError::AccelerationExceedsLimit { requested, max } => {
-                write!(f, "Requested acceleration {} exceeds maximum {}", requested, max)
+                write!(
+                    f,
+                    "Requested acceleration {} exceeds maximum {}",
+                    requested, max
+                )
             }
             MotionError::MoveTooShort { steps, minimum } => {
-                write!(f, "Move of {} steps too short, minimum is {}", steps, minimum)
+                write!(
+                    f,
+                    "Move of {} steps too short, minimum is {}",
+                    steps, minimum
+                )
             }
             MotionError::Overflow => write!(f, "Motion profile computation overflow"),
         }
@@ -267,10 +297,18 @@ impl fmt::Display for TrajectoryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TrajectoryError::MotorNotFound { trajectory, motor } => {
-                write!(f, "Trajectory '{}' references unknown motor '{}'", trajectory, motor)
+                write!(
+                    f,
+                    "Trajectory '{}' references unknown motor '{}'",
+                    trajectory, motor
+                )
             }
             TrajectoryError::TargetExceedsLimits { target, min, max } => {
-                write!(f, "Target position {} exceeds limits [{}, {}]", target, min, max)
+                write!(
+                    f,
+                    "Target position {} exceeds limits [{}, {}]",
+                    target, min, max
+                )
             }
             TrajectoryError::EmptyWaypoints => write!(f, "Waypoint list is empty"),
             TrajectoryError::TooManyWaypoints => {

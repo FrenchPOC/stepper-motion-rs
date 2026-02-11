@@ -17,9 +17,8 @@ use std::thread;
 use std::time::Duration;
 
 use stepper_motion::{
-    Degrees, DegreesPerSec,
-    LimitEvent, LimitFlags, LimitHandler, LimitType,
-    SwitchPolarity, HomingConfig, HomingStrategy, HomingDirection,
+    Degrees, DegreesPerSec, HomingConfig, HomingDirection, HomingStrategy, LimitEvent, LimitFlags,
+    LimitHandler, LimitType, SwitchPolarity,
 };
 
 // =============================================================================
@@ -44,9 +43,12 @@ static MOTOR_RUNNING: AtomicBool = AtomicBool::new(false);
 
 /// Min limit callback - called when min limit switch changes state
 fn on_min_limit(event: LimitEvent) {
-    println!("[ISR] Min limit: pin={}, activated={}", 
-             event.pin_state, event.is_activated());
-    
+    println!(
+        "[ISR] Min limit: pin={}, activated={}",
+        event.pin_state,
+        event.is_activated()
+    );
+
     if event.is_activated() {
         println!("[ISR] ⛔ MIN LIMIT HIT - Emergency stop!");
     }
@@ -54,9 +56,12 @@ fn on_min_limit(event: LimitEvent) {
 
 /// Max limit callback - called when max limit switch changes state  
 fn on_max_limit(event: LimitEvent) {
-    println!("[ISR] Max limit: pin={}, activated={}",
-             event.pin_state, event.is_activated());
-    
+    println!(
+        "[ISR] Max limit: pin={}, activated={}",
+        event.pin_state,
+        event.is_activated()
+    );
+
     if event.is_activated() {
         println!("[ISR] ⛔ MAX LIMIT HIT - Emergency stop!");
     }
@@ -86,8 +91,10 @@ fn simulate_limit_interrupts(min_pos: i32, max_pos: i32, home_pos: i32) {
         .with_max_polarity(SwitchPolarity::NO);
 
     println!("🔌 [HW SIM] Interrupt simulator started");
-    println!("          Min limit at: {}, Max limit at: {}, Home at: {}", 
-             min_pos, max_pos, home_pos);
+    println!(
+        "          Min limit at: {}, Max limit at: {}, Home at: {}",
+        min_pos, max_pos, home_pos
+    );
 
     let mut last_min_active = false;
     let mut last_max_active = false;
@@ -144,8 +151,11 @@ fn move_steps(steps: i32) -> i32 {
     let direction = if steps >= 0 { 1 } else { -1 };
     let mut completed = 0;
 
-    println!("🔄 Moving {} steps (direction: {})", steps.abs(), 
-             if direction > 0 { "forward" } else { "reverse" });
+    println!(
+        "🔄 Moving {} steps (direction: {})",
+        steps.abs(),
+        if direction > 0 { "forward" } else { "reverse" }
+    );
 
     for _ in 0..steps.abs() {
         // Check emergency stop (set by interrupt callback)
@@ -172,9 +182,13 @@ fn move_steps(steps: i32) -> i32 {
         thread::sleep(Duration::from_micros(50));
     }
 
-    println!("   Completed {} of {} steps. Position: {}", 
-             completed, steps.abs(), MOTOR_POSITION.load(Ordering::SeqCst));
-    
+    println!(
+        "   Completed {} of {} steps. Position: {}",
+        completed,
+        steps.abs(),
+        MOTOR_POSITION.load(Ordering::SeqCst)
+    );
+
     completed * direction
 }
 
@@ -196,7 +210,7 @@ fn perform_homing(config: &HomingConfig) -> Result<(), &'static str> {
     // Phase 1: Fast approach to home switch
     println!("\n   Phase 1: Fast approach");
     let max_steps = (config.max_travel.0 * 100.0) as i32;
-    
+
     for step in 0..max_steps {
         if LIMIT_FLAGS.is_emergency_stop() {
             return Err("Emergency stop during homing");
@@ -218,7 +232,7 @@ fn perform_homing(config: &HomingConfig) -> Result<(), &'static str> {
     // Phase 2: Back off
     println!("   Phase 2: Backing off {:?}", config.backoff_distance);
     HOME_FOUND.store(false, Ordering::SeqCst);
-    
+
     let backoff_steps = (config.backoff_distance.0 * 100.0) as i32;
     for _ in 0..backoff_steps {
         MOTOR_POSITION.fetch_add(-direction, Ordering::SeqCst);
@@ -274,7 +288,7 @@ fn main() {
         direction: HomingDirection::ToMin,
         fast_velocity: DegreesPerSec(10.0),
         slow_velocity: DegreesPerSec(2.0),
-        backoff_distance: Degrees(2.0),  // 200 steps at 100 steps/mm
+        backoff_distance: Degrees(2.0), // 200 steps at 100 steps/mm
         home_offset: Degrees(0.0),
         max_travel: Degrees(50.0),
         home_position: Degrees(0.0),
