@@ -344,6 +344,134 @@ where
         })
     }
 
+    /// Start continuous backward motion at a constant velocity.
+    ///
+    /// Backward is the negative/counter-clockwise direction in motor coordinates.
+    /// Use [`AsyncStepperMotor::<STEP, DIR, DELAY, Moving>::stop`] to stop.
+    pub fn start_continuous_backward(
+        mut self,
+        velocity: DegreesPerSec,
+    ) -> core::result::Result<AsyncStepperMotor<STEP, DIR, DELAY, Moving>, (Self, Error)> {
+        if velocity.0 <= 0.0 {
+            return Err((
+                self,
+                Error::Motion(crate::error::MotionError::InvalidVelocity {
+                    requested: velocity.0,
+                }),
+            ));
+        }
+
+        let max_velocity = self.constraints.max_velocity.0;
+        if velocity.0 > max_velocity {
+            return Err((
+                self,
+                Error::Motion(crate::error::MotionError::VelocityExceedsLimit {
+                    requested: velocity.0,
+                    max: max_velocity,
+                }),
+            ));
+        }
+
+        let direction = Direction::CounterClockwise;
+        if let Some(limit) = self.soft_limit_for_next_step(direction) {
+            let next_position = self.next_position_steps(direction);
+            return Err((
+                self,
+                Error::Motor(MotorError::LimitExceeded {
+                    position: next_position,
+                    limit,
+                }),
+            ));
+        }
+
+        if self.set_direction(direction).is_err() {
+            return Err((self, Error::Motor(MotorError::PinError)));
+        }
+
+        let interval_ns = self
+            .constraints
+            .velocity_to_interval_ns(self.constraints.velocity_to_steps(velocity.0));
+
+        Ok(AsyncStepperMotor {
+            step_pin: self.step_pin,
+            dir_pin: self.dir_pin,
+            delay: self.delay,
+            position: self.position,
+            current_direction: self.current_direction,
+            constraints: self.constraints,
+            name: self.name,
+            invert_direction: self.invert_direction,
+            backlash_steps: self.backlash_steps,
+            executor: None,
+            continuous_interval_ns: Some(interval_ns),
+            _state: PhantomData,
+        })
+    }
+
+    /// Run continuous forward motion until the home switch is triggered.
+    ///
+    /// This convenience helper starts continuous forward mode, steps with
+    /// switch checks, and stops the motor when the home switch is reached.
+    /// Any non-home limit trigger or motion error is returned.
+    pub async fn run_continuous_forward_until_home<HOME, MIN, MAX>(
+        self,
+        velocity: DegreesPerSec,
+        switches: &mut HomingSwitches<'_, HOME, MIN, MAX>,
+    ) -> Result<AsyncStepperMotor<STEP, DIR, DELAY, Idle>>
+    where
+        HOME: InputPin,
+        MIN: InputPin,
+        MAX: InputPin,
+    {
+        let mut moving = self
+            .start_continuous_forward(velocity)
+            .map_err(|(_motor, err)| err)?;
+
+        loop {
+            match moving.step_async_with_switch_checks(switches).await {
+                Ok(_) => {}
+                Err(Error::Motor(MotorError::HardwareLimitTriggered { limit_type }))
+                    if limit_type.as_str() == "home" =>
+                {
+                    return Ok(moving.stop());
+                }
+                Err(err) => return Err(err),
+            }
+        }
+    }
+
+    /// Run continuous backward motion until the home switch is triggered.
+    ///
+    /// This convenience helper starts continuous backward mode, steps with
+    /// switch checks, and stops the motor when the home switch is reached.
+    /// Any non-home limit trigger or motion error is returned.
+    pub async fn run_continuous_backward_until_home<HOME, MIN, MAX>(
+        self,
+        velocity: DegreesPerSec,
+        switches: &mut HomingSwitches<'_, HOME, MIN, MAX>,
+    ) -> Result<AsyncStepperMotor<STEP, DIR, DELAY, Idle>>
+    where
+        HOME: InputPin,
+        MIN: InputPin,
+        MAX: InputPin,
+    {
+        let mut moving = self
+            .start_continuous_backward(velocity)
+            .map_err(|(_motor, err)| err)?;
+
+        loop {
+            match moving.step_async_with_switch_checks(switches).await {
+                Ok(_) => {}
+                Err(Error::Motor(MotorError::HardwareLimitTriggered { limit_type }))
+                    if limit_type.as_str() == "home" =>
+                {
+                    return Ok(moving.stop());
+                }
+                Err(err) => return Err(err),
+            }
+        }
+    }
+
     /// Set the current position as the origin (zero).
     pub fn set_origin(&mut self) {
         self.position.set_origin();

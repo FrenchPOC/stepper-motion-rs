@@ -318,6 +318,134 @@ where
         })
     }
 
+    /// Start continuous backward motion at a constant velocity.
+    ///
+    /// Backward is the negative/counter-clockwise direction in motor coordinates.
+    /// Use [`StepperMotor::<STEP, DIR, DELAY, Moving>::stop`] to stop.
+    pub fn start_continuous_backward(
+        mut self,
+        velocity: DegreesPerSec,
+    ) -> core::result::Result<StepperMotor<STEP, DIR, DELAY, Moving>, (Self, Error)> {
+        if velocity.0 <= 0.0 {
+            return Err((
+                self,
+                Error::Motion(crate::error::MotionError::InvalidVelocity {
+                    requested: velocity.0,
+                }),
+            ));
+        }
+
+        let max_velocity = self.constraints.max_velocity.0;
+        if velocity.0 > max_velocity {
+            return Err((
+                self,
+                Error::Motion(crate::error::MotionError::VelocityExceedsLimit {
+                    requested: velocity.0,
+                    max: max_velocity,
+                }),
+            ));
+        }
+
+        let direction = Direction::CounterClockwise;
+        if let Some(limit) = self.soft_limit_for_next_step(direction) {
+            let next_position = self.next_position_steps(direction);
+            return Err((
+                self,
+                Error::Motor(MotorError::LimitExceeded {
+                    position: next_position,
+                    limit,
+                }),
+            ));
+        }
+
+        if self.set_direction(direction).is_err() {
+            return Err((self, Error::Motor(MotorError::PinError)));
+        }
+
+        let interval_ns = self
+            .constraints
+            .velocity_to_interval_ns(self.constraints.velocity_to_steps(velocity.0));
+
+        Ok(StepperMotor {
+            step_pin: self.step_pin,
+            dir_pin: self.dir_pin,
+            delay: self.delay,
+            position: self.position,
+            current_direction: self.current_direction,
+            constraints: self.constraints,
+            name: self.name,
+            invert_direction: self.invert_direction,
+            backlash_steps: self.backlash_steps,
+            executor: None,
+            continuous_interval_ns: Some(interval_ns),
+            _state: PhantomData,
+        })
+    }
+
+    /// Run continuous forward motion until the home switch is triggered.
+    ///
+    /// This convenience helper starts continuous forward mode, steps with
+    /// switch checks, and stops the motor when the home switch is reached.
+    /// Any non-home limit trigger or motion error is returned.
+    pub fn run_continuous_forward_until_home<HOME, MIN, MAX>(
+        self,
+        velocity: DegreesPerSec,
+        switches: &mut HomingSwitches<'_, HOME, MIN, MAX>,
+    ) -> Result<StepperMotor<STEP, DIR, DELAY, Idle>>
+    where
+        HOME: InputPin,
+        MIN: InputPin,
+        MAX: InputPin,
+    {
+        let mut moving = self
+            .start_continuous_forward(velocity)
+            .map_err(|(_motor, err)| err)?;
+
+        loop {
+            match moving.step_with_switch_checks(switches) {
+                Ok(_) => {}
+                Err(Error::Motor(MotorError::HardwareLimitTriggered { limit_type }))
+                    if limit_type.as_str() == "home" =>
+                {
+                    return Ok(moving.stop());
+                }
+                Err(err) => return Err(err),
+            }
+        }
+    }
+
+    /// Run continuous backward motion until the home switch is triggered.
+    ///
+    /// This convenience helper starts continuous backward mode, steps with
+    /// switch checks, and stops the motor when the home switch is reached.
+    /// Any non-home limit trigger or motion error is returned.
+    pub fn run_continuous_backward_until_home<HOME, MIN, MAX>(
+        self,
+        velocity: DegreesPerSec,
+        switches: &mut HomingSwitches<'_, HOME, MIN, MAX>,
+    ) -> Result<StepperMotor<STEP, DIR, DELAY, Idle>>
+    where
+        HOME: InputPin,
+        MIN: InputPin,
+        MAX: InputPin,
+    {
+        let mut moving = self
+            .start_continuous_backward(velocity)
+            .map_err(|(_motor, err)| err)?;
+
+        loop {
+            match moving.step_with_switch_checks(switches) {
+                Ok(_) => {}
+                Err(Error::Motor(MotorError::HardwareLimitTriggered { limit_type }))
+                    if limit_type.as_str() == "home" =>
+                {
+                    return Ok(moving.stop());
+                }
+                Err(err) => return Err(err),
+            }
+        }
+    }
+
     /// Set the current position as the origin (zero).
     pub fn set_origin(&mut self) {
         self.position.set_origin();
@@ -695,6 +823,25 @@ mod tests {
     }
 
     #[test]
+    fn start_and_stop_continuous_backward() {
+        let motor = build_motor(None);
+        let mut moving = match motor.start_continuous_backward(DegreesPerSec(120.0)) {
+            Ok(moving) => moving,
+            Err((_motor, err)) => panic!("continuous start should succeed: {}", err),
+        };
+
+        assert!(moving.is_continuous());
+        assert!(!moving.is_complete());
+
+        moving.step().expect("first step");
+        moving.step().expect("second step");
+        assert_eq!(moving.position_steps().0, -2);
+
+        let idle = moving.stop();
+        assert_eq!(idle.position_steps().0, -2);
+    }
+
+    #[test]
     fn continuous_forward_enforces_soft_limit() {
         let limits = StepLimits {
             min_steps: -10,
@@ -715,6 +862,32 @@ mod tests {
             Error::Motor(MotorError::LimitExceeded { position, limit }) => {
                 assert_eq!(position, 3);
                 assert_eq!(limit, 2);
+            }
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn continuous_backward_enforces_soft_limit() {
+        let limits = StepLimits {
+            min_steps: -2,
+            max_steps: 10,
+            policy: LimitPolicy::Reject,
+        };
+        let motor = build_motor(Some(limits));
+        let mut moving = match motor.start_continuous_backward(DegreesPerSec(100.0)) {
+            Ok(moving) => moving,
+            Err((_motor, err)) => panic!("continuous start should succeed: {}", err),
+        };
+
+        moving.step().expect("step 1");
+        moving.step().expect("step 2");
+
+        let err = moving.step().expect_err("third step should hit limit");
+        match err {
+            Error::Motor(MotorError::LimitExceeded { position, limit }) => {
+                assert_eq!(position, -3);
+                assert_eq!(limit, -2);
             }
             other => panic!("unexpected error: {:?}", other),
         }
@@ -748,6 +921,51 @@ mod tests {
                 assert_eq!(limit_type.as_str(), "home");
             }
             other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn run_continuous_backward_until_home_stops_and_returns_idle() {
+        let motor = build_motor(None);
+        let mut home = MockInputPin { high: false };
+        let mut switches: HomingSwitches<'_, MockInputPin, MockInputPin, MockInputPin> =
+            HomingSwitches::new(
+                Some(&mut home),
+                Some(SwitchConfig::new(SwitchPolarity::NO)),
+                None,
+                None,
+                None,
+                None,
+            );
+
+        let idle = motor
+            .run_continuous_backward_until_home(DegreesPerSec(100.0), &mut switches)
+            .expect("home trigger should stop continuous backward helper");
+
+        assert_eq!(idle.position_steps().0, 0);
+    }
+
+    #[test]
+    fn run_continuous_forward_until_home_propagates_non_home_limit() {
+        let motor = build_motor(None);
+        let mut home = MockInputPin { high: true };
+        let mut min = MockInputPin { high: false };
+        let mut switches: HomingSwitches<'_, MockInputPin, MockInputPin, MockInputPin> =
+            HomingSwitches::new(
+                Some(&mut home),
+                Some(SwitchConfig::new(SwitchPolarity::NO)),
+                Some(&mut min),
+                Some(SwitchConfig::new(SwitchPolarity::NO)),
+                None,
+                None,
+            );
+
+        match motor.run_continuous_forward_until_home(DegreesPerSec(100.0), &mut switches) {
+            Ok(_) => panic!("min limit should be returned"),
+            Err(Error::Motor(MotorError::HardwareLimitTriggered { limit_type })) => {
+                assert_eq!(limit_type.as_str(), "min");
+            }
+            Err(other) => panic!("unexpected error: {:?}", other),
         }
     }
 }

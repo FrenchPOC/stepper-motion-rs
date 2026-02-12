@@ -156,7 +156,7 @@ while moving_motor.is_moving() {
 let idle_motor = moving_motor.finish();
 ```
 
-### 4. Continuous Forward Motion (Start/Stop)
+### 4. Continuous Motion (Start/Stop)
 
 Use this when you need a constant-speed stream of steps until your application decides to stop.
 
@@ -176,8 +176,9 @@ let motor = StepperMotorBuilder::new()
     .max_acceleration(stepper_motion::DegreesPerSecSquared(720.0))
     .build()?;
 
-// 1) Start continuous forward motion
-let mut moving = motor.start_continuous_forward(DegreesPerSec(120.0))?;
+// 1) Start continuous motion in the desired direction
+// let mut moving = motor.start_continuous_forward(DegreesPerSec(120.0))?;
+let mut moving = motor.start_continuous_backward(DegreesPerSec(120.0))?;
 
 // Optional physical switches (home/min/max)
 let mut switches = HomingSwitches::new(
@@ -211,9 +212,18 @@ loop {
 let motor = moving.stop();
 ```
 
+For a one-call convenience API, you can also run until home directly:
+
+```rust
+let motor = motor.run_continuous_backward_until_home(DegreesPerSec(120.0), &mut switches)?;
+```
+
 Async API parity (`async` feature):
 
 - `AsyncStepperMotor::start_continuous_forward(...)`
+- `AsyncStepperMotor::start_continuous_backward(...)`
+- `AsyncStepperMotor::run_continuous_forward_until_home(...)`
+- `AsyncStepperMotor::run_continuous_backward_until_home(...)`
 - `AsyncStepperMotor<..., Moving>::step_async_with_switch_checks(...)`
 - `AsyncStepperMotor<..., Moving>::stop()`
 

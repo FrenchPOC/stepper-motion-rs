@@ -10,7 +10,7 @@
 //! - **Asymmetric profiles**: Independent acceleration and deceleration rates
 //! - **Position tracking**: Absolute position tracked at all times
 //! - **Type-state safety**: Compile-time motor state verification
-//! - **Continuous mode**: Start/stop constant-speed forward motion with limit checks
+//! - **Continuous mode**: Start/stop constant-speed forward/backward motion with limit checks
 //! - **Async support**: Optional async motor control using `embassy-time` (compatible with std and no_std)
 //!
 //! ## Quick Start

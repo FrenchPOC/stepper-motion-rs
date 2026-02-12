@@ -9,8 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Continuous forward motion API for sync and async motors:
+- Continuous bidirectional motion API for sync and async motors:
   - `start_continuous_forward()` to start constant-speed forward motion
+  - `start_continuous_backward()` to start constant-speed backward motion
+  - `run_continuous_forward_until_home()` / `run_continuous_backward_until_home()` convenience helpers
   - `stop()` to stop continuous motion and return to `Idle`
   - soft-limit enforcement on every continuous step
   - `step_with_switch_checks()` / `step_async_with_switch_checks()` for home/min/max switch validation
