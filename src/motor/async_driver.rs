@@ -5,12 +5,12 @@
 
 use core::marker::PhantomData;
 
-use embassy_time::{Duration, Timer};
+use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::delay::DelayNs as AsyncDelayNs;
 
 use crate::config::units::{Degrees, DegreesPerSec, Steps};
-use crate::config::MechanicalConstraints;
+use crate::config::{HomingConfig, MechanicalConstraints};
 use crate::error::{Error, MotorError, Result};
 use crate::motion::{AsyncMotionExecutor, Direction, MotionPhase, MotionProfile};
 use crate::motor::homing::HomingSwitches;
@@ -89,6 +89,9 @@ where
 
     /// Constant step interval for continuous mode (if running continuously).
     continuous_interval_ns: Option<u32>,
+
+    /// Absolute target time for the next continuous-mode step.
+    continuous_next_tick: Option<Instant>,
 
     /// Type-state marker.
     _state: PhantomData<STATE>,
@@ -190,6 +193,7 @@ where
             backlash_steps,
             executor: None,
             continuous_interval_ns: None,
+            continuous_next_tick: None,
             _state: PhantomData,
         }
     }
@@ -267,6 +271,7 @@ where
             backlash_steps: self.backlash_steps,
             executor: Some(executor),
             continuous_interval_ns: None,
+            continuous_next_tick: None,
             _state: PhantomData,
         })
     }
@@ -340,6 +345,7 @@ where
             backlash_steps: self.backlash_steps,
             executor: None,
             continuous_interval_ns: Some(interval_ns),
+            continuous_next_tick: Some(Instant::now()),
             _state: PhantomData,
         })
     }
@@ -404,8 +410,41 @@ where
             backlash_steps: self.backlash_steps,
             executor: None,
             continuous_interval_ns: Some(interval_ns),
+            continuous_next_tick: Some(Instant::now()),
             _state: PhantomData,
         })
+    }
+
+    /// Execute async homing and return the homed Idle motor plus steps traveled.
+    pub async fn home_async<HOME, MIN, MAX>(
+        mut self,
+        config: HomingConfig,
+        switches: &mut HomingSwitches<'_, HOME, MIN, MAX>,
+    ) -> Result<(Self, i64)>
+    where
+        HOME: InputPin,
+        MIN: InputPin,
+        MAX: InputPin,
+    {
+        let home_position = config.home_position;
+        let steps_taken = super::async_homing::execute_homing_async(
+            &mut self.step_pin,
+            &mut self.dir_pin,
+            &mut self.delay,
+            switches,
+            config,
+            &self.constraints,
+            self.invert_direction,
+        )
+        .await?;
+
+        self.position.set_degrees(home_position);
+        self.current_direction = None;
+        self.executor = None;
+        self.continuous_interval_ns = None;
+        self.continuous_next_tick = None;
+
+        Ok((self, steps_taken))
     }
 
     /// Run continuous forward motion until the home switch is triggered.
@@ -589,6 +628,13 @@ where
             .into());
         }
 
+        if let Some(interval_ns) = self.continuous_interval_ns {
+            let interval = Duration::from_nanos(interval_ns as u64);
+            let next_tick = self.continuous_next_tick.unwrap_or_else(Instant::now);
+            Timer::at(next_tick).await;
+            self.continuous_next_tick = Some(next_tick + interval);
+        }
+
         // Generate step pulse
         self.step_pin.set_high().map_err(|_| MotorError::PinError)?;
 
@@ -600,11 +646,7 @@ where
         // Update position
         self.position.move_steps(direction.sign());
 
-        if let Some(interval_ns) = self.continuous_interval_ns {
-            let delay_ns = interval_ns.saturating_sub(2000);
-            if delay_ns > 0 {
-                Timer::after(Duration::from_nanos(delay_ns as u64)).await;
-            }
+        if self.continuous_interval_ns.is_some() {
             return Ok(false);
         }
 
@@ -706,6 +748,7 @@ where
             backlash_steps: self.backlash_steps,
             executor: None,
             continuous_interval_ns: None,
+            continuous_next_tick: None,
             _state: PhantomData,
         }
     }
