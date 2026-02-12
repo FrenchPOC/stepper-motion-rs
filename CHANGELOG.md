@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Continuous forward motion API for sync and async motors:
+  - `start_continuous_forward()` to start constant-speed forward motion
+  - `stop()` to stop continuous motion and return to `Idle`
+  - soft-limit enforcement on every continuous step
+  - `step_with_switch_checks()` / `step_async_with_switch_checks()` for home/min/max switch validation
+- `MotionError::InvalidVelocity` for invalid (non-positive) continuous-speed requests
+
 ## [0.1.1] - 2025-11-27
 
 ### Fixed

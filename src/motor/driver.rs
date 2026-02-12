@@ -5,13 +5,14 @@
 use core::marker::PhantomData;
 
 use embedded_hal::delay::DelayNs;
-use embedded_hal::digital::OutputPin;
+use embedded_hal::digital::{InputPin, OutputPin};
 
-use crate::config::units::{Degrees, Steps};
+use crate::config::units::{Degrees, DegreesPerSec, Steps};
 use crate::config::MechanicalConstraints;
 use crate::error::{Error, MotorError, Result};
 use crate::motion::{Direction, MotionExecutor, MotionPhase, MotionProfile};
 
+use super::homing::HomingSwitches;
 use super::position::Position;
 use super::state::{Idle, MotorState, Moving, StateName};
 
@@ -59,6 +60,9 @@ where
     /// Motion executor for current move (if any).
     executor: Option<MotionExecutor>,
 
+    /// Constant step interval for continuous mode (if running continuously).
+    continuous_interval_ns: Option<u32>,
+
     /// Type-state marker.
     _state: PhantomData<STATE>,
 }
@@ -99,6 +103,36 @@ where
     pub fn state_name(&self) -> &'static str {
         STATE::name()
     }
+
+    fn current_motion_direction(&self) -> Option<Direction> {
+        self.executor
+            .as_ref()
+            .map(|e| e.profile().direction)
+            .or(self.current_direction)
+    }
+
+    fn next_position_steps(&self, direction: Direction) -> i64 {
+        self.position.steps().0 + direction.sign()
+    }
+
+    fn soft_limit_for_next_step(&self, direction: Direction) -> Option<i64> {
+        let next_position = self.next_position_steps(direction);
+        self.constraints.limits.as_ref().and_then(|limits| {
+            if limits.contains(next_position) {
+                None
+            } else if direction.sign() > 0 {
+                Some(limits.max_steps)
+            } else {
+                Some(limits.min_steps)
+            }
+        })
+    }
+
+    fn hardware_limit_error(limit_type: &str) -> MotorError {
+        MotorError::HardwareLimitTriggered {
+            limit_type: heapless::String::try_from(limit_type).unwrap_or_default(),
+        }
+    }
 }
 
 impl<STEP, DIR, DELAY> StepperMotor<STEP, DIR, DELAY, Idle>
@@ -128,6 +162,7 @@ where
             invert_direction,
             backlash_steps,
             executor: None,
+            continuous_interval_ns: None,
             _state: PhantomData,
         }
     }
@@ -205,6 +240,7 @@ where
             invert_direction: self.invert_direction,
             backlash_steps: self.backlash_steps,
             executor: Some(executor),
+            continuous_interval_ns: None,
             _state: PhantomData,
         })
     }
@@ -216,6 +252,70 @@ where
     ) -> core::result::Result<StepperMotor<STEP, DIR, DELAY, Moving>, (Self, Error)> {
         let target = Degrees(self.position.degrees().0 + delta.0);
         self.move_to(target)
+    }
+
+    /// Start continuous forward motion at a constant velocity.
+    ///
+    /// Forward is the positive/clockwise direction in motor coordinates.
+    /// Use [`StepperMotor::<STEP, DIR, DELAY, Moving>::stop`] to stop.
+    pub fn start_continuous_forward(
+        mut self,
+        velocity: DegreesPerSec,
+    ) -> core::result::Result<StepperMotor<STEP, DIR, DELAY, Moving>, (Self, Error)> {
+        if velocity.0 <= 0.0 {
+            return Err((
+                self,
+                Error::Motion(crate::error::MotionError::InvalidVelocity {
+                    requested: velocity.0,
+                }),
+            ));
+        }
+
+        let max_velocity = self.constraints.max_velocity.0;
+        if velocity.0 > max_velocity {
+            return Err((
+                self,
+                Error::Motion(crate::error::MotionError::VelocityExceedsLimit {
+                    requested: velocity.0,
+                    max: max_velocity,
+                }),
+            ));
+        }
+
+        let direction = Direction::Clockwise;
+        if let Some(limit) = self.soft_limit_for_next_step(direction) {
+            let next_position = self.next_position_steps(direction);
+            return Err((
+                self,
+                Error::Motor(MotorError::LimitExceeded {
+                    position: next_position,
+                    limit,
+                }),
+            ));
+        }
+
+        if self.set_direction(direction).is_err() {
+            return Err((self, Error::Motor(MotorError::PinError)));
+        }
+
+        let interval_ns = self
+            .constraints
+            .velocity_to_interval_ns(self.constraints.velocity_to_steps(velocity.0));
+
+        Ok(StepperMotor {
+            step_pin: self.step_pin,
+            dir_pin: self.dir_pin,
+            delay: self.delay,
+            position: self.position,
+            current_direction: self.current_direction,
+            constraints: self.constraints,
+            name: self.name,
+            invert_direction: self.invert_direction,
+            backlash_steps: self.backlash_steps,
+            executor: None,
+            continuous_interval_ns: Some(interval_ns),
+            _state: PhantomData,
+        })
     }
 
     /// Set the current position as the origin (zero).
@@ -338,10 +438,21 @@ where
     ///
     /// Returns `true` if the move is complete.
     pub fn step(&mut self) -> Result<bool> {
-        let executor = self.executor.as_mut().ok_or(MotorError::NotInitialized)?;
+        if let Some(executor) = self.executor.as_ref() {
+            if executor.is_complete() {
+                return Ok(true);
+            }
+        }
 
-        if executor.is_complete() {
-            return Ok(true);
+        let direction = self
+            .current_motion_direction()
+            .ok_or(MotorError::NotInitialized)?;
+        if let Some(limit) = self.soft_limit_for_next_step(direction) {
+            return Err(MotorError::LimitExceeded {
+                position: self.next_position_steps(direction),
+                limit,
+            }
+            .into());
         }
 
         // Generate step pulse
@@ -353,13 +464,19 @@ where
         self.step_pin.set_low().map_err(|_| MotorError::PinError)?;
 
         // Update position
-        let direction = executor.profile().direction;
         self.position.move_steps(direction.sign());
 
-        // Get delay for next step
-        let interval_ns = executor.current_interval_ns();
+        if let Some(interval_ns) = self.continuous_interval_ns {
+            let delay_ns = interval_ns.saturating_sub(2000);
+            if delay_ns > 0 {
+                self.delay.delay_ns(delay_ns);
+            }
+            return Ok(false);
+        }
 
-        // Advance executor
+        // Profiled motion path
+        let executor = self.executor.as_mut().ok_or(MotorError::NotInitialized)?;
+        let interval_ns = executor.current_interval_ns();
         let has_more = executor.advance();
 
         if has_more {
@@ -373,9 +490,44 @@ where
         Ok(!has_more)
     }
 
+    /// Execute one step after checking home/limit switches.
+    ///
+    /// This is useful for continuous motion where physical switches must be
+    /// checked before each pulse.
+    pub fn step_with_switch_checks<HOME, MIN, MAX>(
+        &mut self,
+        switches: &mut HomingSwitches<'_, HOME, MIN, MAX>,
+    ) -> Result<bool>
+    where
+        HOME: InputPin,
+        MIN: InputPin,
+        MAX: InputPin,
+    {
+        if switches.is_home_triggered()? {
+            return Err(Self::hardware_limit_error("home").into());
+        }
+        if switches.is_min_limit_triggered()? {
+            return Err(Self::hardware_limit_error("min").into());
+        }
+        if switches.is_max_limit_triggered()? {
+            return Err(Self::hardware_limit_error("max").into());
+        }
+
+        self.step()
+    }
+
+    /// Check whether this motor is running in continuous mode.
+    #[inline]
+    pub fn is_continuous(&self) -> bool {
+        self.continuous_interval_ns.is_some()
+    }
+
     /// Check if the move is complete.
     #[inline]
     pub fn is_complete(&self) -> bool {
+        if self.is_continuous() {
+            return false;
+        }
         self.executor
             .as_ref()
             .map(|e| e.is_complete())
@@ -385,12 +537,18 @@ where
     /// Get move progress (0.0 to 1.0).
     #[inline]
     pub fn progress(&self) -> f32 {
+        if self.is_continuous() {
+            return 0.0;
+        }
         self.executor.as_ref().map(|e| e.progress()).unwrap_or(1.0)
     }
 
     /// Get current motion phase.
     #[inline]
     pub fn phase(&self) -> MotionPhase {
+        if self.is_continuous() {
+            return MotionPhase::Cruising;
+        }
         self.executor
             .as_ref()
             .map(|e| e.phase())
@@ -413,12 +571,26 @@ where
             invert_direction: self.invert_direction,
             backlash_steps: self.backlash_steps,
             executor: None,
+            continuous_interval_ns: None,
             _state: PhantomData,
         }
     }
 
+    /// Stop motion and return to Idle state.
+    #[inline]
+    pub fn stop(self) -> StepperMotor<STEP, DIR, DELAY, Idle> {
+        self.finish()
+    }
+
     /// Run the move to completion (blocking).
     pub fn run_to_completion(mut self) -> Result<StepperMotor<STEP, DIR, DELAY, Idle>> {
+        if self.is_continuous() {
+            return Err(MotorError::InvalidState(
+                heapless::String::try_from("continuous_mode").unwrap_or_default(),
+            )
+            .into());
+        }
+
         while !self.is_complete() {
             self.step()?;
         }
@@ -428,5 +600,154 @@ where
 
 #[cfg(test)]
 mod tests {
-    // Tests require embedded-hal-mock, which is in dev-dependencies
+    use core::convert::Infallible;
+
+    use embedded_hal::digital::ErrorType;
+
+    use super::*;
+    use crate::config::units::{DegreesPerSec, DegreesPerSecSquared};
+    use crate::config::{LimitPolicy, StepLimits, SwitchConfig, SwitchPolarity};
+
+    struct MockOutputPin;
+
+    impl ErrorType for MockOutputPin {
+        type Error = Infallible;
+    }
+
+    impl OutputPin for MockOutputPin {
+        fn set_low(&mut self) -> core::result::Result<(), Self::Error> {
+            Ok(())
+        }
+
+        fn set_high(&mut self) -> core::result::Result<(), Self::Error> {
+            Ok(())
+        }
+    }
+
+    struct MockDelay;
+
+    impl DelayNs for MockDelay {
+        fn delay_ns(&mut self, _ns: u32) {}
+    }
+
+    struct MockInputPin {
+        high: bool,
+    }
+
+    impl ErrorType for MockInputPin {
+        type Error = Infallible;
+    }
+
+    impl InputPin for MockInputPin {
+        fn is_high(&mut self) -> core::result::Result<bool, Self::Error> {
+            Ok(self.high)
+        }
+
+        fn is_low(&mut self) -> core::result::Result<bool, Self::Error> {
+            Ok(!self.high)
+        }
+    }
+
+    fn constraints(limits: Option<StepLimits>) -> MechanicalConstraints {
+        MechanicalConstraints {
+            steps_per_revolution: 200,
+            steps_per_degree: 1.0,
+            max_velocity_steps_per_sec: 500.0,
+            max_acceleration_steps_per_sec2: 1000.0,
+            min_step_interval_ns: 2_000_000,
+            limits,
+            max_velocity: DegreesPerSec(500.0),
+            max_acceleration: DegreesPerSecSquared(1000.0),
+        }
+    }
+
+    fn build_motor(
+        limits: Option<StepLimits>,
+    ) -> StepperMotor<MockOutputPin, MockOutputPin, MockDelay, Idle> {
+        StepperMotor::new(
+            MockOutputPin,
+            MockOutputPin,
+            MockDelay,
+            constraints(limits),
+            heapless::String::try_from("test").unwrap(),
+            false,
+            0,
+        )
+    }
+
+    #[test]
+    fn start_and_stop_continuous_forward() {
+        let motor = build_motor(None);
+        let mut moving = match motor.start_continuous_forward(DegreesPerSec(120.0)) {
+            Ok(moving) => moving,
+            Err((_motor, err)) => panic!("continuous start should succeed: {}", err),
+        };
+
+        assert!(moving.is_continuous());
+        assert!(!moving.is_complete());
+
+        moving.step().expect("first step");
+        moving.step().expect("second step");
+        assert_eq!(moving.position_steps().0, 2);
+
+        let idle = moving.stop();
+        assert_eq!(idle.position_steps().0, 2);
+    }
+
+    #[test]
+    fn continuous_forward_enforces_soft_limit() {
+        let limits = StepLimits {
+            min_steps: -10,
+            max_steps: 2,
+            policy: LimitPolicy::Reject,
+        };
+        let motor = build_motor(Some(limits));
+        let mut moving = match motor.start_continuous_forward(DegreesPerSec(100.0)) {
+            Ok(moving) => moving,
+            Err((_motor, err)) => panic!("continuous start should succeed: {}", err),
+        };
+
+        moving.step().expect("step 1");
+        moving.step().expect("step 2");
+
+        let err = moving.step().expect_err("third step should hit limit");
+        match err {
+            Error::Motor(MotorError::LimitExceeded { position, limit }) => {
+                assert_eq!(position, 3);
+                assert_eq!(limit, 2);
+            }
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn switch_checks_stop_continuous_motion() {
+        let motor = build_motor(None);
+        let mut moving = match motor.start_continuous_forward(DegreesPerSec(100.0)) {
+            Ok(moving) => moving,
+            Err((_motor, err)) => panic!("continuous start should succeed: {}", err),
+        };
+
+        let mut home = MockInputPin { high: false };
+        let mut switches: HomingSwitches<'_, MockInputPin, MockInputPin, MockInputPin> =
+            HomingSwitches::new(
+                Some(&mut home),
+                Some(SwitchConfig::new(SwitchPolarity::NO)),
+                None,
+                None,
+                None,
+                None,
+            );
+
+        let err = moving
+            .step_with_switch_checks(&mut switches)
+            .expect_err("home switch should stop motion");
+
+        match err {
+            Error::Motor(MotorError::HardwareLimitTriggered { limit_type }) => {
+                assert_eq!(limit_type.as_str(), "home");
+            }
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
 }

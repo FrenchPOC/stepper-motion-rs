@@ -111,6 +111,11 @@ pub enum HomingError {
 /// Motion profile and execution errors.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MotionError {
+    /// Requested velocity is not valid (must be > 0)
+    InvalidVelocity {
+        /// Requested velocity
+        requested: f32,
+    },
     /// Requested velocity exceeds motor's maximum
     VelocityExceedsLimit {
         /// Requested velocity
@@ -267,6 +272,13 @@ impl fmt::Display for HomingError {
 impl fmt::Display for MotionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            MotionError::InvalidVelocity { requested } => {
+                write!(
+                    f,
+                    "Requested velocity {} is invalid (must be > 0)",
+                    requested
+                )
+            }
             MotionError::VelocityExceedsLimit { requested, max } => {
                 write!(
                     f,

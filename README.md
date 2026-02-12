@@ -156,6 +156,67 @@ while moving_motor.is_moving() {
 let idle_motor = moving_motor.finish();
 ```
 
+### 4. Continuous Forward Motion (Start/Stop)
+
+Use this when you need a constant-speed stream of steps until your application decides to stop.
+
+```rust
+use stepper_motion::{
+    config::units::DegreesPerSec,
+    HomingSwitches, StepperMotorBuilder, SwitchConfig, SwitchPolarity,
+};
+
+let motor = StepperMotorBuilder::new()
+    .step_pin(step_pin)
+    .dir_pin(dir_pin)
+    .delay(delay)
+    .steps_per_revolution(200)
+    .microsteps(stepper_motion::Microsteps::SIXTEENTH)
+    .max_velocity(stepper_motion::DegreesPerSec(360.0))
+    .max_acceleration(stepper_motion::DegreesPerSecSquared(720.0))
+    .build()?;
+
+// 1) Start continuous forward motion
+let mut moving = motor.start_continuous_forward(DegreesPerSec(120.0))?;
+
+// Optional physical switches (home/min/max)
+let mut switches = HomingSwitches::new(
+    Some(&mut home_pin),
+    Some(SwitchConfig::new(SwitchPolarity::NO)),
+    Some(&mut min_pin),
+    Some(SwitchConfig::new(SwitchPolarity::NO)),
+    Some(&mut max_pin),
+    Some(SwitchConfig::new(SwitchPolarity::NO)),
+);
+
+loop {
+    // 2) Step with switch + soft limit checks
+    match moving.step_with_switch_checks(&mut switches) {
+        Ok(_) => {}
+        Err(stepper_motion::Error::Motor(
+            stepper_motion::error::MotorError::LimitExceeded { .. },
+        ))
+        | Err(stepper_motion::Error::Motor(
+            stepper_motion::error::MotorError::HardwareLimitTriggered { .. },
+        )) => break,
+        Err(e) => return Err(e),
+    }
+
+    if should_stop() {
+        break;
+    }
+}
+
+// 3) Stop (returns Idle state)
+let motor = moving.stop();
+```
+
+Async API parity (`async` feature):
+
+- `AsyncStepperMotor::start_continuous_forward(...)`
+- `AsyncStepperMotor<..., Moving>::step_async_with_switch_checks(...)`
+- `AsyncStepperMotor<..., Moving>::stop()`
+
 ## Architecture
 
 ```
@@ -285,6 +346,9 @@ cargo run --example config_driven
 # Multi-motor system demonstration
 cargo run --example multi_motor
 ```
+
+Agent integration prompt for continuous mode:
+- `docs/agent-continuous-motion-prompt.md`
 
 ## Type-State Safety
 
