@@ -1,6 +1,7 @@
 //! System configuration - root configuration structure.
 
-use heapless::{FnvIndexMap, String};
+use heapless::index_map::FnvIndexMap;
+use heapless::String;
 use serde::Deserialize;
 
 use super::motor::MotorConfig;

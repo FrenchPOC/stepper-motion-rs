@@ -33,7 +33,7 @@ embassy-time = { version = "0.4", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 
 # no_std collections with serde support
-heapless = { version = "0.8", features = ["serde"] }
+heapless = { version = "0.9", features = ["serde"] }
 
 # Math functions for no_std
 libm = "0.2"

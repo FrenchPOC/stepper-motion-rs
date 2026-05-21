@@ -4,7 +4,8 @@
 
 use embedded_hal::digital::OutputPin;
 use embedded_hal_async::delay::DelayNs as AsyncDelayNs;
-use heapless::{FnvIndexMap, String};
+use heapless::index_map::FnvIndexMap;
+use heapless::String;
 
 use crate::config::{MechanicalConstraints, MotorConfig, SystemConfig};
 use crate::error::{ConfigError, Error, Result};

@@ -1,6 +1,7 @@
 //! Trajectory registry for named trajectory lookup.
 
-use heapless::{FnvIndexMap, String};
+use heapless::index_map::FnvIndexMap;
+use heapless::String;
 
 use crate::config::TrajectoryConfig;
 use crate::error::{Error, Result, TrajectoryError};
