@@ -416,11 +416,54 @@ where
     }
 
     /// Execute async homing and return the homed Idle motor plus steps traveled.
+    ///
+    /// On success, returns `Ok((self, steps_taken))`. On failure, returns
+    /// `Err((self, error))`, preserving the motor for reuse.
     pub async fn home_async<HOME, MIN, MAX>(
         mut self,
         config: HomingConfig,
         switches: &mut HomingSwitches<'_, HOME, MIN, MAX>,
-    ) -> Result<(Self, i64)>
+    ) -> core::result::Result<(Self, i64), (Self, Error)>
+    where
+        HOME: InputPin,
+        MIN: InputPin,
+        MAX: InputPin,
+    {
+        let home_position = config.home_position;
+        let steps_taken = match super::async_homing::execute_homing_async(
+            &mut self.step_pin,
+            &mut self.dir_pin,
+            &mut self.delay,
+            switches,
+            config,
+            &self.constraints,
+            self.invert_direction,
+        )
+        .await
+        {
+            Ok(steps) => steps,
+            Err(e) => return Err((self, e)),
+        };
+
+        self.position.set_degrees(home_position);
+        self.current_direction = None;
+        self.executor = None;
+        self.continuous_interval_ns = None;
+        self.continuous_next_tick = None;
+
+        Ok((self, steps_taken))
+    }
+
+    /// Execute async homing without consuming the motor.
+    ///
+    /// On success, the motor's position is updated to `config.home_position`.  
+    /// On error, the motor remains usable — only [`Error`] is returned and the
+    /// motor's internal state (pins, position, etc.) is left intact.
+    pub async fn home_in_place_async<HOME, MIN, MAX>(
+        &mut self,
+        config: HomingConfig,
+        switches: &mut HomingSwitches<'_, HOME, MIN, MAX>,
+    ) -> Result<i64>
     where
         HOME: InputPin,
         MIN: InputPin,
@@ -444,7 +487,7 @@ where
         self.continuous_interval_ns = None;
         self.continuous_next_tick = None;
 
-        Ok((self, steps_taken))
+        Ok(steps_taken)
     }
 
     /// Run continuous forward motion until the home switch is triggered.
