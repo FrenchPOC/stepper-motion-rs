@@ -9,7 +9,7 @@ use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::delay::DelayNs as AsyncDelayNs;
 
-use crate::config::units::{Degrees, DegreesPerSec, Steps};
+use crate::config::units::{Degrees, DegreesPerSec, DegreesPerSecSquared, Steps};
 use crate::config::{HomingConfig, MechanicalConstraints};
 use crate::error::{Error, MotorError, Result};
 use crate::motion::{AsyncMotionExecutor, Direction, MotionPhase, MotionProfile};
@@ -202,9 +202,39 @@ where
     ///
     /// Returns a motor in the `Moving` state.
     pub fn move_to(
-        mut self,
+        self,
         target: Degrees,
     ) -> core::result::Result<AsyncStepperMotor<STEP, DIR, DELAY, Moving>, (Self, Error)> {
+        let acceleration = self.constraints.max_acceleration;
+        self.move_to_with_acceleration(target, acceleration, acceleration)
+    }
+
+    /// Start a move with independent acceleration and deceleration (degrees/s²).
+    /// Rates must be positive, finite and within the motor's acceleration limit.
+    pub fn move_to_with_acceleration(
+        mut self,
+        target: Degrees,
+        acceleration: DegreesPerSecSquared,
+        deceleration: DegreesPerSecSquared,
+    ) -> core::result::Result<AsyncStepperMotor<STEP, DIR, DELAY, Moving>, (Self, Error)> {
+        for rate in [acceleration.0, deceleration.0] {
+            if !rate.is_finite() || rate <= 0.0 {
+                return Err((
+                    self,
+                    Error::Config(crate::error::ConfigError::InvalidMaxAcceleration(rate)),
+                ));
+            }
+            if rate > self.constraints.max_acceleration.0 {
+                let max = self.constraints.max_acceleration.0;
+                return Err((
+                    self,
+                    Error::Motion(crate::error::MotionError::AccelerationExceedsLimit {
+                        requested: rate,
+                        max,
+                    }),
+                ));
+            }
+        }
         // Calculate steps to target
         let target_steps = Steps::from_degrees(target, self.constraints.steps_per_degree);
         let delta_steps = target_steps.0 - self.position.steps().0;
@@ -243,10 +273,11 @@ where
         }
 
         // Create motion profile
-        let profile = MotionProfile::symmetric_trapezoidal(
+        let profile = MotionProfile::asymmetric_trapezoidal(
             delta_steps,
             self.constraints.max_velocity_steps_per_sec,
-            self.constraints.max_acceleration_steps_per_sec2,
+            self.constraints.acceleration_to_steps(acceleration.0),
+            self.constraints.acceleration_to_steps(deceleration.0),
         );
 
         // Set direction
@@ -612,7 +643,19 @@ where
     /// This is the async equivalent of `move_to_blocking`. Other tasks can
     /// run during the step delays.
     pub async fn move_to_async(self, target: Degrees) -> core::result::Result<Self, (Self, Error)> {
-        match self.move_to(target) {
+        let acceleration = self.constraints.max_acceleration;
+        self.move_to_async_with_acceleration(target, acceleration, acceleration)
+            .await
+    }
+
+    /// Run a move with independent acceleration and deceleration to completion.
+    pub async fn move_to_async_with_acceleration(
+        self,
+        target: Degrees,
+        acceleration: DegreesPerSecSquared,
+        deceleration: DegreesPerSecSquared,
+    ) -> core::result::Result<Self, (Self, Error)> {
+        match self.move_to_with_acceleration(target, acceleration, deceleration) {
             Ok(moving) => match moving.run_to_completion_async().await {
                 Ok(idle) => Ok(idle),
                 Err(e) => {
@@ -676,6 +719,12 @@ where
             let next_tick = self.continuous_next_tick.unwrap_or_else(Instant::now);
             Timer::at(next_tick).await;
             self.continuous_next_tick = Some(next_tick + interval);
+        } else {
+            self.executor
+                .as_mut()
+                .ok_or(MotorError::NotInitialized)?
+                .wait_step_interval()
+                .await;
         }
 
         // Generate step pulse
@@ -693,18 +742,8 @@ where
             return Ok(false);
         }
 
-        // Profiled motion path
         let executor = self.executor.as_mut().ok_or(MotorError::NotInitialized)?;
-        let interval_ns = executor.current_interval_ns();
         let has_more = executor.advance();
-
-        if has_more {
-            // Async delay until next step (subtract pulse width)
-            let delay_ns = interval_ns.saturating_sub(2000);
-            if delay_ns > 0 {
-                Timer::after(Duration::from_nanos(delay_ns as u64)).await;
-            }
-        }
 
         Ok(!has_more)
     }

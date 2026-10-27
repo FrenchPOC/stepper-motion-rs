@@ -45,6 +45,9 @@ toml = { version = "0.8", optional = true }
 defmt = { version = "0.3", optional = true }
 
 [dev-dependencies]
+embassy-time = { version = "0.4", features = ["mock-driver", "generic-queue-64"] }
+critical-section = { version = "1.2", features = ["std"] }
+
 # Mock implementations for testing
 embedded-hal-mock = "0.11"
 

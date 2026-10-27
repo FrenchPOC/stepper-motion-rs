@@ -3,7 +3,7 @@
 //! This module provides async motion execution compatible with both std and no_std
 //! environments using the embassy-time crate for async delays.
 
-use embassy_time::{Duration, Timer};
+use embassy_time::{Duration, Instant, Timer};
 
 use super::profile::{MotionPhase, MotionProfile};
 
@@ -23,16 +23,15 @@ pub struct AsyncMotionExecutor {
 
     /// Current phase of motion.
     phase: MotionPhase,
+
+    started_at: Option<Instant>,
+    elapsed_ns: u64,
 }
 
 impl AsyncMotionExecutor {
     /// Create a new async executor for a motion profile.
     pub fn new(profile: MotionProfile) -> Self {
-        let phase = if profile.is_zero() {
-            MotionPhase::Complete
-        } else {
-            MotionPhase::Accelerating
-        };
+        let phase = profile.phase_at(0);
 
         let interval = if profile.is_zero() {
             u32::MAX
@@ -45,6 +44,8 @@ impl AsyncMotionExecutor {
             current_step: 0,
             current_interval_ns: interval,
             phase,
+            started_at: None,
+            elapsed_ns: 0,
         }
     }
 
@@ -98,6 +99,7 @@ impl AsyncMotionExecutor {
             return false;
         }
 
+        self.elapsed_ns += self.current_interval_ns as u64;
         self.current_step += 1;
 
         if self.current_step >= self.profile.total_steps {
@@ -113,30 +115,24 @@ impl AsyncMotionExecutor {
         true
     }
 
-    /// Wait for the current step interval asynchronously.
+    /// Wait until the next STEP rising edge is due.
     ///
-    /// This method uses embassy-time for non-blocking delays, allowing
-    /// other tasks to run while waiting.
-    pub async fn wait_step_interval(&self) {
-        if self.current_interval_ns > 0 && self.current_interval_ns < u32::MAX {
-            // Subtract pulse width (2us = 2000ns) as done in blocking version
-            let delay_ns = self.current_interval_ns.saturating_sub(2000);
-            if delay_ns > 0 {
-                // Convert to Duration - embassy-time supports nanosecond precision
-                let duration = Duration::from_nanos(delay_ns as u64);
-                Timer::after(duration).await;
-            }
+    /// Absolute deadlines include the first and last step intervals and prevent
+    /// pulse widths, timer rounding and task execution from accumulating drift.
+    pub async fn wait_step_interval(&mut self) {
+        if !self.is_complete() {
+            let start = *self.started_at.get_or_insert_with(Instant::now);
+            let elapsed = self.elapsed_ns + self.current_interval_ns as u64;
+            Timer::at(start + Duration::from_nanos(elapsed)).await;
         }
     }
 
     /// Reset the executor to the beginning.
     pub fn reset(&mut self) {
         self.current_step = 0;
-        self.phase = if self.profile.is_zero() {
-            MotionPhase::Complete
-        } else {
-            MotionPhase::Accelerating
-        };
+        self.phase = self.profile.phase_at(0);
+        self.started_at = None;
+        self.elapsed_ns = 0;
         self.current_interval_ns = if self.profile.is_zero() {
             u32::MAX
         } else {

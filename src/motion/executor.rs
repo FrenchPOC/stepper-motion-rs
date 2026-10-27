@@ -21,11 +21,7 @@ pub struct MotionExecutor {
 impl MotionExecutor {
     /// Create a new executor for a motion profile.
     pub fn new(profile: MotionProfile) -> Self {
-        let phase = if profile.is_zero() {
-            MotionPhase::Complete
-        } else {
-            MotionPhase::Accelerating
-        };
+        let phase = profile.phase_at(0);
 
         let interval = if profile.is_zero() {
             u32::MAX
@@ -109,11 +105,7 @@ impl MotionExecutor {
     /// Reset the executor to the beginning.
     pub fn reset(&mut self) {
         self.current_step = 0;
-        self.phase = if self.profile.is_zero() {
-            MotionPhase::Complete
-        } else {
-            MotionPhase::Accelerating
-        };
+        self.phase = self.profile.phase_at(0);
         self.current_interval_ns = if self.profile.is_zero() {
             u32::MAX
         } else {

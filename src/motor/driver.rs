@@ -7,7 +7,7 @@ use core::marker::PhantomData;
 use embedded_hal::delay::DelayNs;
 use embedded_hal::digital::{InputPin, OutputPin};
 
-use crate::config::units::{Degrees, DegreesPerSec, Steps};
+use crate::config::units::{Degrees, DegreesPerSec, DegreesPerSecSquared, Steps};
 use crate::config::MechanicalConstraints;
 use crate::error::{Error, MotorError, Result};
 use crate::motion::{Direction, MotionExecutor, MotionPhase, MotionProfile};
@@ -171,9 +171,39 @@ where
     ///
     /// Returns a motor in the `Moving` state.
     pub fn move_to(
-        mut self,
+        self,
         target: Degrees,
     ) -> core::result::Result<StepperMotor<STEP, DIR, DELAY, Moving>, (Self, Error)> {
+        let acceleration = self.constraints.max_acceleration;
+        self.move_to_with_acceleration(target, acceleration, acceleration)
+    }
+
+    /// Start a move with independent acceleration and deceleration (degrees/s²).
+    /// Rates must be positive, finite and within the motor's acceleration limit.
+    pub fn move_to_with_acceleration(
+        mut self,
+        target: Degrees,
+        acceleration: DegreesPerSecSquared,
+        deceleration: DegreesPerSecSquared,
+    ) -> core::result::Result<StepperMotor<STEP, DIR, DELAY, Moving>, (Self, Error)> {
+        for rate in [acceleration.0, deceleration.0] {
+            if !rate.is_finite() || rate <= 0.0 {
+                return Err((
+                    self,
+                    Error::Config(crate::error::ConfigError::InvalidMaxAcceleration(rate)),
+                ));
+            }
+            if rate > self.constraints.max_acceleration.0 {
+                let max = self.constraints.max_acceleration.0;
+                return Err((
+                    self,
+                    Error::Motion(crate::error::MotionError::AccelerationExceedsLimit {
+                        requested: rate,
+                        max,
+                    }),
+                ));
+            }
+        }
         // Calculate steps to target
         let target_steps = Steps::from_degrees(target, self.constraints.steps_per_degree);
         let delta_steps = target_steps.0 - self.position.steps().0;
@@ -213,10 +243,11 @@ where
         }
 
         // Create motion profile
-        let profile = MotionProfile::symmetric_trapezoidal(
+        let profile = MotionProfile::asymmetric_trapezoidal(
             delta_steps,
             self.constraints.max_velocity_steps_per_sec,
-            self.constraints.max_acceleration_steps_per_sec2,
+            self.constraints.acceleration_to_steps(acceleration.0),
+            self.constraints.acceleration_to_steps(deceleration.0),
         );
 
         // Set direction
@@ -583,6 +614,18 @@ where
             .into());
         }
 
+        // Profile intervals describe travel before each rising edge. After the
+        // first pulse, account for the previous pulse's high time.
+        if let Some(executor) = self.executor.as_ref() {
+            let pulse_ns = if executor.current_step() == 0 {
+                0
+            } else {
+                2000
+            };
+            self.delay
+                .delay_ns(executor.current_interval_ns().saturating_sub(pulse_ns));
+        }
+
         // Generate step pulse
         self.step_pin.set_high().map_err(|_| MotorError::PinError)?;
 
@@ -602,18 +645,8 @@ where
             return Ok(false);
         }
 
-        // Profiled motion path
         let executor = self.executor.as_mut().ok_or(MotorError::NotInitialized)?;
-        let interval_ns = executor.current_interval_ns();
         let has_more = executor.advance();
-
-        if has_more {
-            // Delay until next step (subtract pulse width)
-            let delay_ns = interval_ns.saturating_sub(2000);
-            if delay_ns > 0 {
-                self.delay.delay_ns(delay_ns);
-            }
-        }
 
         Ok(!has_more)
     }
